@@ -541,6 +541,10 @@ CGroundMoveType::CGroundMoveType(CUnit* owner):
 
 CGroundMoveType::~CGroundMoveType()
 {
+	// creg
+	if (owner == nullptr)
+		return;
+
 	Disconnect();
 
 	if (nextPathId != 0) {
