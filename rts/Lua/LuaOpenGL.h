@@ -340,6 +340,7 @@ class LuaOpenGL {
 		static int ReadPixels(lua_State* L);
 		static int SaveImage(lua_State* L);
 
+		static int GPUStamp(lua_State* L);
 		static int CreateQuery(lua_State* L);
 		static int DeleteQuery(lua_State* L);
 		static int RunQuery(lua_State* L);

@@ -1456,7 +1456,8 @@ bool CGame::Draw() {
 
 	SCOPED_SPECIAL_TIMER("Draw");
 	SCOPED_GL_DEBUGGROUP("Draw");
-	globalRendering->SetGLTimeStamp(CGlobalRendering::FRAME_REF_TIME_QUERY_IDX);
+	globalRendering->CollectGPUStamps();
+	globalRendering->GPUStamp("Frame::Begin", true);
 
 	SetDrawMode(gameNormalDraw);
 
@@ -1466,6 +1467,7 @@ bool CGame::Draw() {
 	{
 		SCOPED_TIMER("Draw::DrawGenesis");
 		eventHandler.DrawGenesis();
+		globalRendering->GPUStamp("Lua::DrawGenesis", true);
 	}
 
 	if (!globalRendering->active) {
@@ -1534,17 +1536,20 @@ bool CGame::Draw() {
 			unitDrawer->DrawUnitIconsScreen();
 
 		eventHandler.DrawScreenEffects();
+		globalRendering->GPUStamp("Lua::DrawScreenEffects", true);
 
 		hudDrawer->Draw((gu->GetMyPlayer())->fpsController.GetControllee());
 		debugDrawerAI->Draw();
 
 		DrawInputReceivers();
+		globalRendering->GPUStamp("Lua::DrawScreen", true);
 		DrawInputText();
 		DrawInterfaceWidgets();
 		RmlGui::RenderFrame();
 		mouse->DrawCursor();
 
 		eventHandler.DrawScreenPost();
+		globalRendering->GPUStamp("Lua::DrawScreenPost", true);
 	}
 
 	glEnable(GL_DEPTH_TEST);
@@ -1564,7 +1569,7 @@ bool CGame::Draw() {
 	gu->avgDrawFrameTime = mix(gu->avgDrawFrameTime, currentFrameDrawTime.toMilliSecsf(), 0.05f);
 
 	eventHandler.DbgTimingInfo(TIMING_VIDEO, currentTimePreDraw, currentTimePostDraw);
-	globalRendering->SetGLTimeStamp(CGlobalRendering::FRAME_END_TIME_QUERY_IDX);
+	globalRendering->GPUStamp("Frame::End", true);
 
 	lastDrawFrameTime = currentTimePostDraw;
 
