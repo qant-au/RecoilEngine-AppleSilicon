@@ -13,6 +13,10 @@
 #include <cstring>
 #include <string>
 
+#ifdef __APPLE__
+#include "System/Platform/Mac/Keyboard.h"
+#endif
+
 InputHandler input;
 
 // ---------------------------------------------------------------------------
@@ -188,6 +192,9 @@ void InputHandler::PushEvents()
 	while (SDL_PollEvent(&event)) {
 		// SDL_PollEvent may modify FPU flags
 		streflop::streflop_init<streflop::Simple>();
+#ifdef __APPLE__
+		MacKeyboard::TranslateEvent(event);
+#endif
 		PushEvent(event);
 	}
 }
