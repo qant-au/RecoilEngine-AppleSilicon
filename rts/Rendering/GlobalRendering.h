@@ -351,6 +351,7 @@ public:
 	bool supportClipSpaceControl;
 	bool supportSeamlessCubeMaps;
 	bool supportFragDepthLayout;
+	bool preferFirstProvokingVertex;
 
 	/**
 	 * @brief whether the geometry-shader stage actually rasterizes
