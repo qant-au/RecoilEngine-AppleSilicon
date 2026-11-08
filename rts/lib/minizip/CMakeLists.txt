@@ -9,6 +9,16 @@ if     (MINIZIP_FOUND)
 
 	set_global(SPRING_MINIZIP_INCLUDE_DIR "${MINIZIP_INCLUDE_DIR}")
 	set_global(SPRING_MINIZIP_LIBRARY "${MINIZIP_LIBRARY}")
+	# A static minizip-ng (the spring-static-libs build) depends on liblzma. Linux
+	# gets liblzma through the libunwind block in rts/CMakeLists.txt and tolerates
+	# unresolved symbols in shared objects; macOS does neither, so unitsync failed
+	# to link. Carry the dependency with the library on APPLE only.
+	if (APPLE AND MINIZIP_LIBRARY MATCHES "\\.a$")
+		find_library(MINIZIP_LZMA_LIBRARY NAMES liblzma.a lzma)
+		if (MINIZIP_LZMA_LIBRARY)
+			set_global(SPRING_MINIZIP_LIBRARY "${MINIZIP_LIBRARY};${MINIZIP_LZMA_LIBRARY}")
+		endif ()
+	endif ()
 else   (MINIZIP_FOUND)
 	# Build our own minizip library
 	
