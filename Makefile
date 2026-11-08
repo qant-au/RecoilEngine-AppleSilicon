@@ -69,6 +69,7 @@ engine:
 test:
 	packaging/test/message-check-test.sh
 	packaging/test/launcher-test.sh
+	packaging/test/sl-bridge-test.sh
 	packaging/test/dialog-center-test.sh   # shows real windows; skips without a screen
 
 clean-artifacts:

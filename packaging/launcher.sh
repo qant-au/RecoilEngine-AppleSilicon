@@ -494,6 +494,20 @@ if [ ! -x "$HERE/spring" ]; then
   fail_dialog "The game engine is missing from the app bundle. The download may have been interrupted — please re-download the game and drag it to Applications again."
   exit 1
 fi
+# spring-launcher bridge: the lobby's replay list and in-lobby downloads talk to
+# their launcher over a local socket (WG.WrapperLoopback). sl-bridge provides it,
+# advertises itself via $WRITEDIR/sl-connection.json, and exits on its own when
+# this PID (which becomes the engine on exec) is gone. Optional: the game still
+# runs without it, only replays and lobby downloads do not.
+rm -f "$WRITEDIR/sl-connection.json"
+if [ -x "$HERE/sl-bridge" ]; then
+  ENGINE_VERSION="$(/usr/libexec/PlistBuddy -c "Print :EngineVersion" "$CONTENTS/Info.plist" 2>/dev/null || true)"
+  "$HERE/sl-bridge" --writedir "$WRITEDIR" --prd "$HERE/pr-downloader" \
+    --engine "$HERE/spring" --engine-version "$ENGINE_VERSION" \
+    --parent-pid "$$" --log "$WRITEDIR/sl-bridge.log" >/dev/null 2>&1 &
+  # give it a moment to write sl-connection.json before the lobby looks for it
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$WRITEDIR/sl-connection.json" ] && break; sleep 0.1; done
+fi
 # execfail: a failed exec (kernel refused the binary: bad arch, quarantine,
 # corrupt file) returns control here instead of silently killing the shell.
 shopt -s execfail 2>/dev/null || true
