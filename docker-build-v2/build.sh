@@ -18,7 +18,7 @@ export CMAKE_BUILD_PARALLEL_LEVEL=
 
 case $(uname -m) in
   x86_64) ARCH=amd64 ;;
-  aarch64) ARCH=arm64 ;;
+  aarch64|arm64) ARCH=arm64 ;;  # arm64 = uname -m on macOS hosts
   *) ARCH=unknown ;;
 esac
 
