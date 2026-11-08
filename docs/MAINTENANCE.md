@@ -59,6 +59,17 @@ runs.
   so a cold run is slow; later runs are incremental.
   GitHub Actions are disabled on this repository by decision: all builds and
   tests are local.
+  If Actions are ever re-enabled, only the non-Mac guard should run. The
+  workflows inherited from upstream that publish or act for BAR are disabled
+  one by one on GitHub (`gh workflow disable`, so the files stay identical to
+  upstream and merges stay clean): `bar-cdn-publish`, `publish-site`,
+  `docker-images-build`, `generate-lua-library` and `opencode` (it runs an
+  unpinned `@latest` action on any issue comment). Still enabled:
+  `engine-build` (Linux + Windows), `synctest`, `streflop-float-test`,
+  `release-build` (all manual-only), and `check-lua` and `assemble` (small
+  Linux jobs on push). There is no macOS job: macOS runners cost money and the
+  macOS checks run locally. Check the state with
+  `gh api repos/qant-au/RecoilEngine-AppleSilicon/actions/workflows --jq '.workflows[]|[.path,.state]|@tsv'`.
 
 ## Bumping to a new upstream pin (the version-bump procedure)
 
