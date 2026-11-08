@@ -208,13 +208,27 @@ make release     # certified + Developer ID signed + notarized (needs
 make engine      # just the engine binary, with the sync gates
 ```
 
-**Released builds currently ship with online play disabled** (the online
-lobby resolves to an unreachable loopback endpoint; LAN and local play are
-unaffected) while approval to connect to BAR's community servers is sought.
-Source builds default to online enabled; to reproduce the released
-configuration, pass `ONLINE=0` (e.g. `ONLINE=0 make app`) or
-`packaging/release-build.sh --disable-online`. Please do not distribute
-online-enabled builds until that approval is in place.
+**Online play is disabled by default** in every build, source builds included
+(`packaging/release-build.sh` defaults to `BAR_ONLINE=0`: the online lobby
+resolves to an unreachable loopback endpoint; LAN and local play are
+unaffected). `ONLINE=0 make app` and `--disable-online` remain as explicit
+spellings of the default; `--enable-online` is a deliberate local opt-in.
+Approval to connect to BAR's community servers has not been sought for this
+repository yet: do not distribute an online-enabled build until it is.
+
+### Tests
+
+Unit tests build in their own directory, never in `build-engine/` (a bare
+`ninja` there undoes the gcc-swapped libm objects and silently breaks fleet
+parity):
+
+```sh
+scripts/build-engine.sh                      # engine + libm parity gate
+cmake -S . -B build-tests -G Ninja -DAI_TYPES=NONE   # once (see scripts/build-engine.sh for the full flag set)
+ninja -C build-tests tests spring-headless basecontent
+(cd build-tests && ctest --output-on-failure)
+packaging/test/message-check-test.sh && packaging/test/launcher-test.sh
+```
 
 What the build does, in order: builds the Mesa Zink+KosmicKrisp driver from
 the pinned upstream commit + `patches/mesa/` (provenance-stamped, skipped
