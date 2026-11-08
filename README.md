@@ -280,6 +280,7 @@ work on the port (with or without an AI agent).
 
 | Document | What it is |
 |---|---|
+| [docs/PARITY.md](docs/PARITY.md) | **The authoritative status of macOS against the official Windows and Linux builds**: what matches, what is equivalent, what is open, and how to re-check each. |
 | [AGENTS.md](AGENTS.md) | Start here to work on the port: read-order, the hard rules, and how to build. Written so an AI coding agent can get up and running. |
 | [docs/PORTING_PRINCIPLES.md](docs/PORTING_PRINCIPLES.md) | The golden rules — the determinism contract, sim untouchability, per-subsystem strategy, and the verification ladder. |
 | [SYNC_VALIDATION.md](docs/SYNC_VALIDATION.md) | How multiplayer bit-exactness is proven: method, numbers, reproduction commands, and honest limits. |
