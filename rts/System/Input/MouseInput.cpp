@@ -34,6 +34,7 @@
 #include <SDL_events.h>
 #include <SDL_hints.h>
 #include <SDL_syswm.h>
+#include <SDL_version.h>
 #include <SDL_touch.h>
 #ifdef __APPLE__
 #include <SDL_video.h>
@@ -227,12 +228,20 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 				// arrive as high-frequency fractional precise (pixel) deltas
 				// (preciseY != y). "flipped" == macOS natural-scroll direction.
 				const bool flipped = (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED);
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+				// preciseX/Y arrived in SDL 2.0.18; the Linux/Windows build images
+				// ship an older SDL2, so the precise half is compiled only where present.
 				const bool precise = (event.wheel.preciseX != (float)event.wheel.x) ||
 				                     (event.wheel.preciseY != (float)event.wheel.y);
 				LOG_L(L_NOTICE, "[input] wheel  src=%s dir=%s line=%d,%d precise=%.4f,%.4f %s",
 					MouseSrcStr(event.wheel.which), flipped ? "flipped" : "normal",
 					event.wheel.x, event.wheel.y, event.wheel.preciseX, event.wheel.preciseY,
 					precise ? "PRECISE/pixel" : "LINE/notch");
+#else
+				LOG_L(L_NOTICE, "[input] wheel  src=%s dir=%s line=%d,%d",
+					MouseSrcStr(event.wheel.which), flipped ? "flipped" : "normal",
+					event.wheel.x, event.wheel.y);
+#endif
 			}
 
 			if (mouse != nullptr)
