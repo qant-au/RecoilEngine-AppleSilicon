@@ -21,6 +21,10 @@
 	#include <sys/futex.h>
 #endif
 
+#ifdef __APPLE__
+	#include <os/lock.h>
+#endif
+
 #ifndef _WIN32
 	#include <unistd.h>
 #endif
@@ -33,7 +37,14 @@
 
 InitSpringTime ist;
 
-#ifndef _WIN32
+#if defined(__APPLE__)
+	// macOS has no futex syscall; time the OS's own unfair lock in its place.
+	typedef uint32_t lock;
+	static os_unfair_lock apple_lock = OS_UNFAIR_LOCK_INIT;
+	static void futex_init(lock* m) { *m = 0; }
+	static void futex_lock(lock* m) { os_unfair_lock_lock(&apple_lock); *m = 1; }
+	static void futex_unlock(lock* m) { *m = 0; os_unfair_lock_unlock(&apple_lock); }
+#elif !defined(_WIN32)
 	typedef uint32_t lock;
 
 	static inline long do_futex (uint32_t *mtx, int op, uint32_t value, const struct timespec *timeout)
@@ -73,7 +84,6 @@ InitSpringTime ist;
 			do_futex(m, FUTEX_WAKE_PRIVATE, 1, NULL);
 		}
 	}
-#endif
 #endif
 
 
