@@ -519,6 +519,24 @@ done
 [ "$AUDIT_FAIL" = "0" ] || exit 1
 echo "bundle closure audit: all references bundle-relative, resolvable, or system"
 
+# Deployment-target audit: no bundled Mach-O may require a newer macOS than the
+# bundle declares (LSMinimumSystemVersion = $MACOSX_DEPLOYMENT_TARGET). Homebrew
+# bottles carry the minos of the macOS they were bottled on (minizip came out
+# 27.2 against a 27.0 floor), and dyld on the build machine tolerates it, so
+# only a check on the artifact itself catches this before a user does.
+for m in "$MACOS"/* "$FRAMEWORKS"/*.dylib; do
+  [ -L "$m" ] && continue
+  file "$m" | grep -q 'Mach-O' || continue
+  mo=$(vtool -show-build "$m" 2>/dev/null | awk '/minos/{print $2; exit}')
+  [ -n "$mo" ] || continue
+  if [ "$(printf '%s\n%s\n' "$mo" "$MACOSX_DEPLOYMENT_TARGET" | sort -V | tail -1)" != "$MACOSX_DEPLOYMENT_TARGET" ]; then
+    echo "FATAL: $(basename "$m") requires macOS $mo, above the bundle floor $MACOSX_DEPLOYMENT_TARGET"
+    AUDIT_FAIL=1
+  fi
+done
+[ "$AUDIT_FAIL" = "0" ] || exit 1
+echo "deployment-target audit: every bundled Mach-O loads on macOS $MACOSX_DEPLOYMENT_TARGET"
+
 # Strip debug symbol tables from every bundled Mach-O. A RELWITHDEBINFO link
 # records one OSO debug-map entry per object file, each holding the ABSOLUTE
 # path of the .o/.a it came from — 875 of them in `spring` alone, i.e. the

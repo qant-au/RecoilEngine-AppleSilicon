@@ -100,6 +100,12 @@ fi
 SDL2_PREFIX="$("$BAR/scripts/build-sdl2.sh")"
 CMAKE_EXTRA=()
 [ -n "$SDL2_PREFIX" ] && CMAKE_EXTRA+=(-DCMAKE_PREFIX_PATH="$SDL2_PREFIX") && echo "SDL2: $SDL2_PREFIX"
+# minizip from pinned source at the deployment target (Homebrew's bottle is
+# built for whatever macOS it was bottled on); see build-minizip.sh.
+MINIZIP_PREFIX="$("$BAR/scripts/build-minizip.sh")"
+CMAKE_EXTRA+=(-DMINIZIP_INCLUDE_DIR="$MINIZIP_PREFIX/include" -DMINIZIP_LIBRARY="$MINIZIP_PREFIX/lib/libminizip.dylib")
+echo "minizip: $MINIZIP_PREFIX"
+export PKG_CONFIG_PATH="$MINIZIP_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 
 # VERSION-TAG GUARD. ConfigureVersion.cmake derives the reported engine version
 # (which must match the autohosts) from the nearest numeric release tag. A clone
