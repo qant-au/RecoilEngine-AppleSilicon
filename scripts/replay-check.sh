@@ -23,7 +23,20 @@
 # lists them (use the id for .../replays/<id>, whose fileName is downloadable from
 # https://storage.uk.cloud.ovh.net/v1/AUTH_10286efc0d334efd917d476d7183232e/BAR/demos/).
 # Its gameVersion must be present in --content (pr-downloader --download-game) and
-# its map too (--download-map).
+# its map too (--download-map). Point pr-downloader at BAR's content network, or
+# it falls back to the old springrts repositories and finds nothing:
+#   PRD_RAPID_REPO_MASTER=https://repos-cdn.beyondallreason.dev/repos.gz \
+#   PRD_HTTP_SEARCH_URL=https://files-cdn.beyondallreason.dev/find \
+#   build-engine/tools/pr-downloader/src/pr-downloader \
+#     --filesystem-writepath "<content dir>" --download-map "<map name>"
+#
+# Linux: run this same script inside upstream's build image, e.g.
+#   docker run --rm --platform linux/amd64 --entrypoint bash -v "$PWD:/src" \
+#     -v "<content dir>:/content:ro" ghcr.io/beyond-all-reason/recoil-build-amd64-linux@<digest> \
+#     /src/scripts/replay-check.sh /src/<demo> --engine /src/build-amd64-linux/spring-headless \
+#     --content /content
+# (digest: docker-build-v2/images_versions.sh). The official release binary from
+# https://github.com/beyond-all-reason/RecoilEngine/releases is the control.
 set -uo pipefail
 
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
