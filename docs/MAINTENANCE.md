@@ -53,9 +53,10 @@ runs.
 - **Non-Mac builds must keep working.** This layer edits shared files, and a
   Linux/Windows break is invisible from a Mac build (an SDL >= 2.0.18-only field
   in `MouseInput.cpp` broke the Linux build until 2026-11-08). Before pushing a
-  change outside `Platform/Mac`, build Linux locally:
-  `/opt/homebrew/bin/bash docker-build-v2/build.sh --arch amd64 linux`
-  (bash 4+ required; amd64 runs emulated on Apple Silicon, so it is slow).
+  change outside `Platform/Mac`, run `scripts/check-nonmac.sh` (Linux build,
+  Linux unit tests, Windows cross-build, all in Docker; prints `NONMAC_OK`).
+  It needs bash 4+ (Homebrew bash) and amd64 runs emulated on Apple Silicon,
+  so a cold run is slow; later runs are incremental.
   GitHub Actions are disabled on this repository by decision: all builds and
   tests are local.
 
