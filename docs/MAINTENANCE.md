@@ -30,6 +30,35 @@ Shipping happens on the pinned tag + macOS layer, nothing else: lockstep
 multiplayer requires byte-identical simulation to the version the live fleet
 runs.
 
+## Where this repository stands (measured 2026-11-08)
+
+- **Base:** upstream release tag `2026.07.04`, which is what BAR's production
+  servers run. Measure, don't assume: the engine for each BAR setup is in
+  [BYAR-Chobby `dist_cfg/config.json`](https://github.com/beyond-all-reason/BYAR-Chobby/blob/master/dist_cfg/config.json)
+  (`manual-linux` / `manual-win` = production, `*-test-engine` = the next one;
+  2026.09.02 as of 2026-10-27). Bump when production moves, not before.
+- **Against `master`:** about 120 commits ahead and 180 behind. Recoil cuts
+  releases on branches, so neither 2026.07.04 nor 2026.09.02 is on `master`, and
+  "behind master" is mostly unreleased work. Track releases, watch `master` for
+  fixes we need.
+- **Remotes:** `origin` = this repository; `upstream` =
+  `beyond-all-reason/RecoilEngine` (fetch-only, for tags);
+  `benbreen` = the original port (fetch-only, inactive since 2026-08).
+- **Already upstream as of 2026.09.01/2026.09.02** (drop ours at that rebase,
+  take upstream's): the float->short heading UB fix (`da974d379b`, #3342;
+  replaces our `8a041014a2`; once the fleet runs it, sync must match upstream's
+  version, not ours), `views::enumerate` compat (#3289), and the testClampRad
+  fix (#3290). `CSolidObject::paletteIndex` is creg-registered on `master` but
+  not yet in a tag.
+- **Non-Mac builds must keep working.** This layer edits shared files, and a
+  Linux/Windows break is invisible from a Mac build (an SDL >= 2.0.18-only field
+  in `MouseInput.cpp` broke the Linux build until 2026-11-08). Before pushing a
+  change outside `Platform/Mac`, build Linux locally:
+  `/opt/homebrew/bin/bash docker-build-v2/build.sh --arch amd64 linux`
+  (bash 4+ required; amd64 runs emulated on Apple Silicon, so it is slow).
+  GitHub Actions are disabled on this repository by decision: all builds and
+  tests are local.
+
 ## Bumping to a new upstream pin (the version-bump procedure)
 
 When the fleet moves to a new engine version `NEW` (e.g. 2026.06.08):
