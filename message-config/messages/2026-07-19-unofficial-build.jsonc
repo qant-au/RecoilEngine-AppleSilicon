@@ -19,13 +19,13 @@
     "</p>",
     "<p style='font-family:-apple-system;font-size:13px'>",
     "Instead, please send feedback and bug reports here:<br>",
-    "<a href='https://github.com/benbreen/RecoilEngine-AppleSilicon/issues'>",
-    "github.com/benbreen/RecoilEngine-AppleSilicon/issues</a>",
+    "<a href='https://github.com/qant-au/RecoilEngine-AppleSilicon/issues'>",
+    "github.com/qant-au/RecoilEngine-AppleSilicon/issues</a>",
     "</p>"
   ],
   "frequency": "always",
   "buttons": [
-    { "label": "Report Feedback / Bugs", "action": "open-url", "url": "https://github.com/benbreen/RecoilEngine-AppleSilicon/issues", "then": "stay" },
+    { "label": "Report Feedback / Bugs", "action": "open-url", "url": "https://github.com/qant-au/RecoilEngine-AppleSilicon/issues", "then": "stay" },
     { "label": "Continue", "action": "continue", "default": true }
   ]
 }

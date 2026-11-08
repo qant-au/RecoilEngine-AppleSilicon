@@ -41,7 +41,7 @@
   ],
   "frequency": "always",
   "buttons": [
-    { "label": "Download Update", "action": "open-url", "url": "https://github.com/benbreen/RecoilEngine-AppleSilicon/releases/latest", "then": "quit", "default": true },
+    { "label": "Download Update", "action": "open-url", "url": "https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest", "then": "quit", "default": true },
     { "label": "Skip Update", "action": "continue" }
   ]
 }
