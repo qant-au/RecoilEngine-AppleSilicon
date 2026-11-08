@@ -191,19 +191,28 @@ public:
 
 			// pass utf8 to fontconfig and hope for the best
 			const std::string configFmtVar = nowide::narrow(ss.str());
+			#elif defined(__APPLE__)
+			// macOS has no system fonts.conf for a bundled fontconfig to load, so,
+			// as on Windows, name the OS font directories explicitly; otherwise no
+			// system fallback fonts (CJK names, accented chat) are available.
+			const char* home = getenv("HOME");
+			const std::string configFmtVar = std::string("<fontconfig>")
+				+ "<dir>/System/Library/Fonts</dir><dir>/Library/Fonts</dir>"
+				+ (home != nullptr ? std::string("<dir>") + home + "/Library/Fonts</dir>" : std::string())
+				+ "<cachedir>fontcache</cachedir></fontconfig>";
 			#else
 			const std::string configFmtVar = R"(<fontconfig><cachedir>fontcache</cachedir></fontconfig>)";
 			#endif
 
-			#ifdef _WIN32
-			// Explicitly set the config with xml for windows.
+			#if defined(_WIN32) || defined(__APPLE__)
+			// Explicitly set the config with xml for windows and macOS.
 			res = FcConfigParseAndLoadFromMemory(config, reinterpret_cast<const FcChar8*>(configFmtVar.c_str()), FcTrue);
 			#else
 			// Load system configuration (passing 0 here so fc will use the default os config file if possible).
 			res = FcConfigParseAndLoad(config, 0, true);
 			#endif
 			if (res) {
-				#ifndef _WIN32
+				#if !defined(_WIN32) && !defined(__APPLE__)
 				// add local cache after system config for linux
 				FcConfigParseAndLoadFromMemory(config, reinterpret_cast<const FcChar8*>(configFmtVar.c_str()), FcTrue);
 				#endif
