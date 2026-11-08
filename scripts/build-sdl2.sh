@@ -16,14 +16,21 @@ set -euo pipefail
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 DEPS="$BAR/deps"
 SDL2_VER="2.32.10"
+# sha256 of the release tarball, from the digest GitHub publishes for the
+# release-2.32.10 asset (gh release view release-2.32.10 -R libsdl-org/SDL).
+SDL2_SHA256="5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165"
 PREFIX="$DEPS/sdl2-install"
 LIB="$PREFIX/lib/libSDL2-2.0.0.dylib"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 
 BREW_SDL2="$(brew --prefix sdl2 2>/dev/null)/lib/libSDL2-2.0.0.dylib"
 if [ -f "$BREW_SDL2" ] && ! LC_ALL=C grep -aq 'libSDL3' "$BREW_SDL2"; then
   exit 0   # a real SDL2 from Homebrew: use it as before
 fi
-if [ -f "$LIB" ] && [ -f "$PREFIX/lib/cmake/SDL2/SDL2Config.cmake" ]; then
+# Reuse a previous build only if it was built for the current deployment target;
+# otherwise the bundle would carry an SDL with a different minos than the engine.
+if [ -f "$LIB" ] && [ -f "$PREFIX/lib/cmake/SDL2/SDL2Config.cmake" ] \
+   && [ "$(vtool -show-build "$LIB" 2>/dev/null | awk '/minos/{print $2; exit}')" = "$TARGET" ]; then
   echo "$PREFIX"; exit 0
 fi
 
@@ -33,6 +40,8 @@ fi
   if [ ! -f "$SRCDIR/CMakeLists.txt" ]; then
     curl -fL --retry 3 -o "$DEPS/SDL2-$SDL2_VER.tar.gz" \
       "https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VER/SDL2-$SDL2_VER.tar.gz"
+    echo "$SDL2_SHA256  $DEPS/SDL2-$SDL2_VER.tar.gz" | shasum -a 256 -c - \
+      || { echo "FATAL: SDL2-$SDL2_VER.tar.gz checksum mismatch" >&2; rm -f "$DEPS/SDL2-$SDL2_VER.tar.gz"; exit 1; }
     tar -xzf "$DEPS/SDL2-$SDL2_VER.tar.gz" -C "$DEPS"
   fi
   rm -rf "$SRCDIR/build"
@@ -42,6 +51,7 @@ fi
   cmake -S "$SRCDIR" -B "$SRCDIR/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="$TARGET" \
     -DCMAKE_C_FLAGS="$PREFIX_MAP" -DCMAKE_OBJC_FLAGS="$PREFIX_MAP" \
     -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF
   ninja -C "$SRCDIR/build" install
