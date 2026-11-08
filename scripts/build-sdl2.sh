@@ -23,10 +23,8 @@ PREFIX="$DEPS/sdl2-install"
 LIB="$PREFIX/lib/libSDL2-2.0.0.dylib"
 TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 
-BREW_SDL2="$(brew --prefix sdl2 2>/dev/null)/lib/libSDL2-2.0.0.dylib"
-if [ -f "$BREW_SDL2" ] && ! LC_ALL=C grep -aq 'libSDL3' "$BREW_SDL2"; then
-  exit 0   # a real SDL2 from Homebrew: use it as before
-fi
+# Always built here, even where Homebrew still ships a real SDL2: the bundle must
+# not depend on what a bottle happens to be.
 # Reuse a previous build only if it was built for the current deployment target;
 # otherwise the bundle would carry an SDL with a different minos than the engine.
 if [ -f "$LIB" ] && [ -f "$PREFIX/lib/cmake/SDL2/SDL2Config.cmake" ] \

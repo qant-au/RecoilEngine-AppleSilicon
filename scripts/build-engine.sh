@@ -49,10 +49,6 @@ MESA_PREFIX="$MESA_PREFIX" "$BAR/scripts/build-mesa-kk.sh"
 test -f "$MESA_LIBEGL" || { echo "FATAL: no libEGL under $MESA_PREFIX after build-mesa-kk.sh"; exit 1; }
 export CPATH="$MESA_PREFIX/include${CPATH:+:$CPATH}"
 
-OPENAL_PREFIX="$(brew --prefix openal-soft)"
-OPENAL_LIB="$OPENAL_PREFIX/lib/libopenal.dylib"
-OPENAL_INC="$OPENAL_PREFIX/include"
-test -f "$OPENAL_LIB" || { echo "FATAL: openal-soft missing"; exit 1; }
 
 # Reproducibility: strip the absolute build-root prefix out of every
 # embedded __FILE__ string (assert/log macros) and DWARF debug path, so the
@@ -95,17 +91,26 @@ if [ -f "$BUILD/CMakeCache.txt" ]; then
   fi
 fi
 
-# Real SDL2 when Homebrew's sdl2 is the sdl2-compat (SDL3) shim; see
-# build-sdl2.sh. Empty when Homebrew still provides a real SDL2.
+# Third-party libraries, resolved the way upstream's Linux release resolves them
+# (docker-build-v2/images/all-linux/Dockerfile): the spring-static-libs set built
+# static (build-static-libs.sh: zlib, png, gif, jpeg, tiff, DevIL, ogg, vorbis, xz,
+# minizip-ng), PREFER_STATIC_LIBS, and pkg-config confined to our prefixes. What
+# Linux takes from the OS (freetype, fontconfig, OpenAL, SDL2) is built from pinned
+# source as dylibs (build-shared-libs.sh, build-sdl2.sh). Homebrew prefixes are
+# ignored entirely, so nothing a bottle happens to contain can reach the engine.
+STATIC_PREFIX="$("$BAR/scripts/build-static-libs.sh")"
+SHARED_PREFIX="$("$BAR/scripts/build-shared-libs.sh")"
 SDL2_PREFIX="$("$BAR/scripts/build-sdl2.sh")"
-CMAKE_EXTRA=()
-[ -n "$SDL2_PREFIX" ] && CMAKE_EXTRA+=(-DCMAKE_PREFIX_PATH="$SDL2_PREFIX") && echo "SDL2: $SDL2_PREFIX"
-# minizip from pinned source at the deployment target (Homebrew's bottle is
-# built for whatever macOS it was bottled on); see build-minizip.sh.
-MINIZIP_PREFIX="$("$BAR/scripts/build-minizip.sh")"
-CMAKE_EXTRA+=(-DMINIZIP_INCLUDE_DIR="$MINIZIP_PREFIX/include" -DMINIZIP_LIBRARY="$MINIZIP_PREFIX/lib/libminizip.dylib")
-echo "minizip: $MINIZIP_PREFIX"
-export PKG_CONFIG_PATH="$MINIZIP_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+echo "static libs: $STATIC_PREFIX"; echo "shared libs: $SHARED_PREFIX"; echo "SDL2: $SDL2_PREFIX"
+export PREFER_STATIC_LIBS=TRUE
+export PKG_CONFIG="pkg-config --static"
+export PKG_CONFIG_LIBDIR="$STATIC_PREFIX/lib/pkgconfig:$SHARED_PREFIX/lib/pkgconfig:$SDL2_PREFIX/lib/pkgconfig"
+unset PKG_CONFIG_PATH
+CMAKE_EXTRA=(
+  -DCMAKE_PREFIX_PATH="$STATIC_PREFIX;$SHARED_PREFIX;$SDL2_PREFIX"
+  -DCMAKE_IGNORE_PREFIX_PATH="/opt/homebrew;/usr/local"
+  -DPREFER_STATIC_LIBS=TRUE
+)
 
 # VERSION-TAG GUARD. ConfigureVersion.cmake derives the reported engine version
 # (which must match the autohosts) from the nearest numeric release tag. A clone
@@ -139,8 +144,7 @@ cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   -DCMAKE_OBJC_COMPILER_LAUNCHER=ccache \
   -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache \
   -DSPRING_MAC_LIBEGL="$MESA_LIBEGL" \
-  -DOPENAL_LIBRARY="$OPENAL_LIB" \
-  -DOPENAL_INCLUDE_DIR="$OPENAL_INC"
+  -DOPENAL_SOFT_PREFIX="$SHARED_PREFIX"
 
 NINJA_TARGETS=(spring spring-headless pr-downloader_cli basecontent)
 if [ "${AI_TYPES:-NATIVE}" != "NONE" ]; then
