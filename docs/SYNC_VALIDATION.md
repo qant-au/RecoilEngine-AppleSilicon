@@ -69,6 +69,29 @@ Reproduce: `spring-headless <demo.sdfz>` with the matching game/map content
 present; watch for `Sync error` lines (none should appear) and the final
 sync-OK verdict. Any public BAR replay recorded on engine 2025.06.24 works.
 
+### 3a. Engine 2026.07.04, re-verified 2026-11-08 (this repository)
+
+Re-run on the current tree (PR #20 merged, SDL2 and minizip from source,
+macOS floor 27.0) with `scripts/replay-check.sh`, against public BAR replays
+recorded by fleet clients on 2026.07.04 (game `test-31836-b250a16`). Because
+the checksums in a demo are the recording fleet clients', a clean replay means
+the replaying build matched the fleet on every frame.
+
+| Replay | Build | Result |
+|---|---|---|
+| 1v1 duel, Pools of Ilys 1.1.2 (4 min) | official `recoil_2026.07.04_amd64-linux` (control) | REPLAY_SYNC_OK, 8,041 frames, 0 desyncs |
+| same | **this repository, amd64 Linux** (docker-build-v2) | REPLAY_SYNC_OK, 8,040 frames, 0 desyncs |
+| same | this repository, macOS arm64 | REPLAY_SYNC_OK, 8,040 frames, 0 desyncs |
+| 8v8, Supreme Isthmus v2.1 (36.5 min) | **this repository, amd64 Linux** | REPLAY_SYNC_OK, 66,019 frames, 0 desyncs |
+| same | this repository, macOS arm64 | REPLAY_SYNC_OK, 66,018 frames, 0 desyncs |
+
+The amd64 Linux rows matter for non-Mac users of this repository: the macOS
+layer changes synced code unconditionally (Appendix A, the float→short heading
+sweep), so its Linux and Windows builds run that code too. They stay
+bit-exact with the fleet. Linux runs used upstream's own build image under
+emulation. Streflop: `scripts/run-synctest.sh` is BIT-EXACT against the x86
+SSE reference (47,852 common tests) and the NEON reference (52,080).
+
 ## 4. Live cross-platform multiplayer (the real thing)
 
 Replays prove the sim; live games additionally prove the network path, and
