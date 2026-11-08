@@ -222,7 +222,11 @@ ls "$MESA_PREFIX/share/vulkan/icd.d/" 2>/dev/null || true
 # silently misses debug-map/symbol-table paths.
 leaks=0
 for d in "$MESA_PREFIX"/lib/*.dylib; do
-  hits="$(LC_ALL=C grep -a -o '/Users/[^ "]\{0,120\}' "$d" 2>/dev/null | sort -u || true)"
+  # Exclude the install names this script itself sets to $MESA_PREFIX/lib/ above
+  # (packaging rewrites them to @rpath and re-audits the bundle); otherwise any
+  # checkout under /Users fails on its own relocation. LC_ALL=C on sort too, or
+  # it aborts on binary bytes and the scan silently reports nothing.
+  hits="$(LC_ALL=C grep -a -o '/Users/[^ "]\{0,120\}' "$d" 2>/dev/null | LC_ALL=C grep -v "^$MESA_PREFIX/lib/" | LC_ALL=C sort -u || true)"
   [ -z "$hits" ] || { n=$(echo "$hits" | wc -l | tr -d ' '); echo "FATAL: $(basename "$d") embeds $n /Users/ path(s):"; echo "$hits" | head -5 | sed 's/^/    /'; leaks=$((leaks+n)); }
 done
 [ "$leaks" -eq 0 ] || { echo "FATAL: driver embeds $leaks builder-path string(s) — see LESSON-41"; exit 1; }
