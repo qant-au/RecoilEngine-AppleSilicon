@@ -156,6 +156,8 @@ CR_REG_METADATA(CGlobalRendering, (
 	CR_IGNORED(winPosY),
 	CR_IGNORED(winSizeX),
 	CR_IGNORED(winSizeY),
+	CR_IGNORED(winSizeXpt),
+	CR_IGNORED(winSizeYpt),
 	CR_IGNORED(viewPosX),
 	CR_IGNORED(viewPosY),
 	CR_IGNORED(viewSizeX),
@@ -233,6 +235,7 @@ CR_REG_METADATA(CGlobalRendering, (
 	CR_IGNORED(sdlWindow),
 	CR_IGNORED(glContext),
 
+	CR_IGNORED(windowTitleBase),
 	CR_IGNORED(glExtensions),
 	CR_IGNORED(glTimerQueries)
 ))
