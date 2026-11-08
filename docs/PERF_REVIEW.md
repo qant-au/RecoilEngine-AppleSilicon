@@ -14,15 +14,15 @@ Measurements are on an M2 Ultra unless stated. Cell names: "arena" is a
 
 | # | Change | Win | Where |
 |---|--------|-----|-------|
-| 1 | Stop enabling primitive restart on list topologies | 6.8 → 23.1 fps (3.4×) | [LuaVAOImpl.cpp](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/Lua/LuaVAOImpl.cpp#L205-L220) |
-| 2 | Present via GPU-pack PBO ring instead of a blocking readback | present 30 ms → 1.3 ms; 23.1 → 30.8 fps | [MetalPresent.mm](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm) |
-| 3 | Move present off the render thread (nextDrawable pacing) | removed a hard 60 fps cap on a 120 Hz panel | [MetalPresent.mm#L410-L440](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm#L410-L440) |
-| 4 | Deeper upload rings + blocking fence waits | removed ~10 ms/frame of `glClientWaitSync` spin | [ModelsDataUploader.cpp#L38-L50](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/Rendering/ModelsDataUploader.cpp#L38-L50) |
-| 5 | Fast shader math mode on the driver | 32.1 → 51.5 fps (+60%) | [patch 0012](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/patches/mesa/0012-kosmickrisp-KK_MATH_MODE-knob-safe-relaxed-fast.patch), [default set here](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MacPresentBackend.mm#L260-L270) |
-| 6 | Present shader reads the mapped ring directly | +1.1–1.4 fps; min 40 → 59 on live scenes | [MetalPresent.mm#L500-L525](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm#L500-L525) |
-| 7 | QoS for frame-critical threads | +1.2–1.3 fps; worst-case floor 13 → 17 fps | [ThreadPool.cpp#L30-L60](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/rts/System/Threading/ThreadPool.cpp#L30-L60) |
-| 8 | Enable zink renderpass tracking for KosmicKrisp | +4.8% (M2 Air, long1) | [patch 0013](https://github.com/benbreen/RecoilEngine-AppleSilicon/blob/main/patches/mesa/0013-zink-enable-renderpass-tracking-for-kosmickrisp.patch) |
-| 9 | Cap render density to the panel and a per-core pixel budget | ~31% fewer pixels on an M2 Air | [commit 93254b0](https://github.com/benbreen/RecoilEngine-AppleSilicon/commit/93254b0e09045a9a3571afe46ac1f4b58374ca1f) |
+| 1 | Stop enabling primitive restart on list topologies | 6.8 → 23.1 fps (3.4×) | [LuaVAOImpl.cpp](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/Lua/LuaVAOImpl.cpp#L205-L220) |
+| 2 | Present via GPU-pack PBO ring instead of a blocking readback | present 30 ms → 1.3 ms; 23.1 → 30.8 fps | [MetalPresent.mm](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm) |
+| 3 | Move present off the render thread (nextDrawable pacing) | removed a hard 60 fps cap on a 120 Hz panel | [MetalPresent.mm#L410-L440](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm#L410-L440) |
+| 4 | Deeper upload rings + blocking fence waits | removed ~10 ms/frame of `glClientWaitSync` spin | [ModelsDataUploader.cpp#L38-L50](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/Rendering/ModelsDataUploader.cpp#L38-L50) |
+| 5 | Fast shader math mode on the driver | 32.1 → 51.5 fps (+60%) | [patch 0012](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/patches/mesa/0012-kosmickrisp-KK_MATH_MODE-knob-safe-relaxed-fast.patch), [default set here](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MacPresentBackend.mm#L260-L270) |
+| 6 | Present shader reads the mapped ring directly | +1.1–1.4 fps; min 40 → 59 on live scenes | [MetalPresent.mm#L500-L525](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/System/Platform/Mac/MetalPresent.mm#L500-L525) |
+| 7 | QoS for frame-critical threads | +1.2–1.3 fps; worst-case floor 13 → 17 fps | [ThreadPool.cpp#L30-L60](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/rts/System/Threading/ThreadPool.cpp#L30-L60) |
+| 8 | Enable zink renderpass tracking for KosmicKrisp | +4.8% (M2 Air, long1) | [patch 0013](https://github.com/qant-au/RecoilEngine-AppleSilicon/blob/main/patches/mesa/0013-zink-enable-renderpass-tracking-for-kosmickrisp.patch) |
+| 9 | Cap render density to the panel and a per-core pixel budget | ~31% fewer pixels on an M2 Air | [commit 93254b0](https://github.com/qant-au/RecoilEngine-AppleSilicon/commit/93254b0e09045a9a3571afe46ac1f4b58374ca1f) |
 
 Link note: the port's history was squashed when it was published, so items 1–7
 have no individual public commit. The links go to the shipped code; item 8 is a

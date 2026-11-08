@@ -1,9 +1,9 @@
 # Recoil Engine Port to Apple Silicon - Plays Beyond All Reason (BAR) natively on macOS
 
 <p align="center">
-  <a href="https://github.com/benbreen/RecoilEngine-AppleSilicon/releases/latest"><img src="https://img.shields.io/github/v/release/benbreen/RecoilEngine-AppleSilicon?logo=apple&label=download&color=1793d1" alt="Latest release"></a>
+  <a href="https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest"><img src="https://img.shields.io/github/v/release/qant-au/RecoilEngine-AppleSilicon?logo=apple&label=download&color=1793d1" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black?logo=apple" alt="macOS · Apple Silicon">
-  <a href="https://github.com/benbreen/RecoilEngine-AppleSilicon/releases"><img src="https://img.shields.io/github/downloads/benbreen/RecoilEngine-AppleSilicon/total?color=44cc11" alt="Downloads"></a>
+  <a href="https://github.com/qant-au/RecoilEngine-AppleSilicon/releases"><img src="https://img.shields.io/github/downloads/qant-au/RecoilEngine-AppleSilicon/total?color=44cc11" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-GPL--2.0-blue" alt="License: GPL-2.0">
   <img src="https://img.shields.io/badge/built%20on-Recoil-orange" alt="Built on the Recoil engine">
 </p>
@@ -13,7 +13,7 @@
 engine itself now runs macOS with no Rosetta and no virtual machine. It achieves <u>100% sync match</u> between macOS and officially supported platforms such as Windows. This means games (such as BAR) can now run natively on macOS. It contains a series of fixes to make sure the behaviour of the game on Apple Silicon matches exactly that of other platforms, plus a series of Apple specific performance improvements.
 
 > [!IMPORTANT]
-> If you run into issues, please report them [here](https://github.com/benbreen/RecoilEngine-AppleSilicon/issues) — **not** in the official Beyond All Reason or Recoil channels. They can't help with problems caused by this port.
+> If you run into issues, please report them [here](https://github.com/qant-au/RecoilEngine-AppleSilicon/issues) — **not** in the official Beyond All Reason or Recoil channels. They can't help with problems caused by this port.
 
 ⚡️ **A Claude Fable port.** The macOS layer in this repository was built
 largely by **[Claude Fable](https://www.anthropic.com)** (Anthropic's Claude
@@ -25,7 +25,7 @@ For convenience, releases also include an **optional BAR launcher package**: a
 drag-to-install app that  downloads **[Beyond All Reason](https://www.beyondallreason.info/)**
 from its official online location and configures the engine to play it.
 
-**Two downloads** on the [releases page](https://github.com/benbreen/RecoilEngine-AppleSilicon/releases/latest):
+**Two downloads** on the [releases page](https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest):
 
 | Artifact | What it is | For whom |
 |---|---|---|
@@ -33,7 +33,7 @@ from its official online location and configures the engine to play it.
 | `Recoil-macos-<engine>-port<ver>.zip` | **The project itself** — the engine port: signed, notarized `spring`, `spring-headless`, and `pr-downloader` with the bundled Metal driver stack. No game content or configuration. | Any Recoil/Spring game community, tooling, or anyone building their own game launcher on top. |
 
 <p align="center">
-  <a href="https://github.com/benbreen/RecoilEngine-AppleSilicon/releases/latest"><b>⬇&nbsp; Download for macOS (Apple Silicon)</b></a>
+  <a href="https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest"><b>⬇&nbsp; Download for macOS (Apple Silicon)</b></a>
   &nbsp;·&nbsp; engine port + optional BAR launcher &nbsp;·&nbsp; macOS 27+
 </p>
 
@@ -282,6 +282,16 @@ work on the port (with or without an AI agent).
 
 This port stands on a lot of prior work, gratefully:
 
+- **[Ben Breen](https://github.com/benbreen/RecoilEngine-AppleSilicon)** —
+  the original Apple Silicon port this repository continues: the sync
+  certification, the Metal present path, the packaging pipeline and the v0.11
+  to v0.13 releases. That repository is no longer maintained; this one is.
+- **[TonyTheCat](https://github.com/TonyTheCat)** and
+  **[kapyctnik-ai](https://github.com/kapyctnik-ai)** — fresh-clone build fixes,
+  the source-built SDL2, the hardware cursor and camera fixes, and MetalFX
+  upscaling, from
+  [PR #20](https://github.com/benbreen/RecoilEngine-AppleSilicon/pull/20) on the
+  original repository, merged here with authorship kept.
 - **[ExaDev](https://github.com/ExaDev/RecoilEngine)** — the foundational
   macOS fork: first working builds, EGL/Zink bring-up, pr-downloader fixes.
   Their commits form the base of this series, preserved with attribution.
@@ -317,5 +327,5 @@ launch.
 ## Reporting issues
 
 This is an unofficial port: please report problems **on this repository's
-issue tracker [here](https://github.com/benbreen/RecoilEngine-AppleSilicon/issues)**, not to the Recoil or BAR projects — a bug here is most likely
+issue tracker [here](https://github.com/qant-au/RecoilEngine-AppleSilicon/issues)**, not to the Recoil or BAR projects — a bug here is most likely
 this port's fault, and their trackers shouldn't carry our noise.
