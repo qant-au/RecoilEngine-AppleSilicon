@@ -1,8 +1,8 @@
-From b3d1465fdda4fed257fbf4d40872f14fb19815fb Mon Sep 17 00:00:00 2001
+From dcd807d405216164c90dcafee48243ead3d49cfd Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
 Date: Fri, 10 Jul 2026 22:25:39 +0100
-Subject: [PATCH 07/11] kosmickrisp: log loaded dylib path + version at
- instance creation
+Subject: [PATCH 4/9] kosmickrisp: log loaded dylib path + version at instance
+ creation
 
 Downstream-only patch (not proposed upstream). This driver is distributed
 project-locally and loaded via VK_ICD_FILENAMES / DYLD_* env vars, so a
@@ -16,7 +16,7 @@ line at vkCreateInstance makes the loaded copy auditable in every log:
  1 file changed, 17 insertions(+)
 
 diff --git a/src/kosmickrisp/vulkan/kk_instance.c b/src/kosmickrisp/vulkan/kk_instance.c
-index 90abd528..677bf404 100644
+index 90abd528338..677bf404390 100644
 --- a/src/kosmickrisp/vulkan/kk_instance.c
 +++ b/src/kosmickrisp/vulkan/kk_instance.c
 @@ -20,6 +20,11 @@

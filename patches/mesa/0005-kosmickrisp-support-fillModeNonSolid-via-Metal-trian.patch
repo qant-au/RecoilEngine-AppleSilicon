@@ -1,8 +1,8 @@
-From 1823e03df44ef8cc319fab7805eb0b82e3555626 Mon Sep 17 00:00:00 2001
+From a232b452dc9476689cd070af174a4144b6c603b1 Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
 Date: Mon, 20 Jul 2026 21:40:42 +0100
-Subject: [PATCH 08/11] kosmickrisp: support fillModeNonSolid via Metal
- triangle fill mode
+Subject: [PATCH 5/9] kosmickrisp: support fillModeNonSolid via Metal triangle
+ fill mode
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -16,7 +16,6 @@ encoder fill mode from the dynamic rasterization state.
 
 VK_POLYGON_MODE_POINT stays unsupported (no Metal equivalent); zink
 never emits it while maint5 polygonModePointSize is false.
-
 ---
  src/kosmickrisp/bridge/mtl_encoder.h        |  3 +++
  src/kosmickrisp/bridge/mtl_encoder.m        | 10 ++++++++++
@@ -27,10 +26,10 @@ never emits it while maint5 polygonModePointSize is false.
  6 files changed, 35 insertions(+)
 
 diff --git a/src/kosmickrisp/bridge/mtl_encoder.h b/src/kosmickrisp/bridge/mtl_encoder.h
-index beed5d5f..c23cd915 100644
+index 02fe86f4f35..f82a4d757a4 100644
 --- a/src/kosmickrisp/bridge/mtl_encoder.h
 +++ b/src/kosmickrisp/bridge/mtl_encoder.h
-@@ -92,6 +92,9 @@ void mtl_set_front_face_winding(mtl_render_encoder *encoder,
+@@ -96,6 +96,9 @@ void mtl_set_front_face_winding(mtl_render_encoder *encoder,
  
  void mtl_set_cull_mode(mtl_render_encoder *encoder, enum mtl_cull_mode mode);
  
@@ -41,7 +40,7 @@ index beed5d5f..c23cd915 100644
                                      enum mtl_visibility_result_mode mode,
                                      size_t offset);
 diff --git a/src/kosmickrisp/bridge/mtl_encoder.m b/src/kosmickrisp/bridge/mtl_encoder.m
-index dd5037ba..7d41bf40 100644
+index 2c355627c13..b03399ae9df 100644
 --- a/src/kosmickrisp/bridge/mtl_encoder.m
 +++ b/src/kosmickrisp/bridge/mtl_encoder.m
 @@ -351,6 +351,16 @@
@@ -62,10 +61,10 @@ index dd5037ba..7d41bf40 100644
  mtl_set_visibility_result_mode(mtl_render_encoder *encoder,
                                 enum mtl_visibility_result_mode mode,
 diff --git a/src/kosmickrisp/bridge/mtl_types.h b/src/kosmickrisp/bridge/mtl_types.h
-index b3dbfea9..9bc1a7e0 100644
+index 26a97944424..727a7ddd6cf 100644
 --- a/src/kosmickrisp/bridge/mtl_types.h
 +++ b/src/kosmickrisp/bridge/mtl_types.h
-@@ -210,6 +210,11 @@ enum mtl_cull_mode {
+@@ -235,6 +235,11 @@ enum mtl_cull_mode {
     MTL_CULL_MODE_BACK = 2,
  };
  
@@ -78,7 +77,7 @@ index b3dbfea9..9bc1a7e0 100644
     MTL_VISIBILITY_RESULT_MODE_DISABLED = 0,
     MTL_VISIBILITY_RESULT_MODE_BOOLEAN = 1,
 diff --git a/src/kosmickrisp/bridge/stubs/mtl_encoder.c b/src/kosmickrisp/bridge/stubs/mtl_encoder.c
-index 931733eb..fb8dc40d 100644
+index 57810abf185..ccca0161959 100644
 --- a/src/kosmickrisp/bridge/stubs/mtl_encoder.c
 +++ b/src/kosmickrisp/bridge/stubs/mtl_encoder.c
 @@ -173,6 +173,12 @@ mtl_set_cull_mode(mtl_render_encoder *encoder, enum mtl_cull_mode mode)
@@ -95,10 +94,10 @@ index 931733eb..fb8dc40d 100644
  mtl_set_visibility_result_mode(mtl_render_encoder *encoder,
                                 enum mtl_visibility_result_mode mode,
 diff --git a/src/kosmickrisp/vulkan/kk_cmd_draw.c b/src/kosmickrisp/vulkan/kk_cmd_draw.c
-index deb51cf2..0b65a695 100644
+index 8f627aa0d0d..6023a0246b3 100644
 --- a/src/kosmickrisp/vulkan/kk_cmd_draw.c
 +++ b/src/kosmickrisp/vulkan/kk_cmd_draw.c
-@@ -1223,6 +1223,16 @@ kk_flush_dynamic_state(struct kk_cmd_buffer *cmd)
+@@ -1297,6 +1297,16 @@ kk_flush_dynamic_state(struct kk_cmd_buffer *cmd)
        }
     }
  
@@ -116,10 +115,10 @@ index deb51cf2..0b65a695 100644
     if (!(dyn->rs.rasterizer_discard_enable || gfx->is_cull_front_and_back) &&
         (IS_DIRTY(VP_VIEWPORT_COUNT) || IS_DIRTY(VP_VIEWPORTS) ||
 diff --git a/src/kosmickrisp/vulkan/kk_physical_device.c b/src/kosmickrisp/vulkan/kk_physical_device.c
-index 5b981faa..f5c1a3ce 100644
+index 65b99ed846d..12ef088ce19 100644
 --- a/src/kosmickrisp/vulkan/kk_physical_device.c
 +++ b/src/kosmickrisp/vulkan/kk_physical_device.c
-@@ -209,6 +209,7 @@ kk_get_device_features(
+@@ -231,6 +231,7 @@ kk_get_device_features(
        .depthClamp = true,
        .drawIndirectFirstInstance = true,
        .dualSrcBlend = true,

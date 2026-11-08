@@ -1,7 +1,7 @@
-From 41ca78652400293579146d05459f567b37800e00 Mon Sep 17 00:00:00 2001
+From cec5b19ed955832db5c88c6ebcbc0afd8df368b7 Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
 Date: Wed, 22 Jul 2026 21:00:41 +0100
-Subject: [PATCH 01/11] poly: barrier after reading shared scratch out_ptr in
+Subject: [PATCH 1/9] poly: barrier after reading shared scratch out_ptr in
  unroll
 
 Add a second CLK_LOCAL_MEM_FENCE so all lanes finish reading out_ptr before the restart-search reduction reuses the same scratch memory; without it a fast lane clobbers scratch and a slow lane stores indices through a garbage pointer (wild heap write -> garbage geometry / giant triangle).
@@ -10,10 +10,10 @@ Add a second CLK_LOCAL_MEM_FENCE so all lanes finish reading out_ptr before the 
  1 file changed, 7 insertions(+)
 
 diff --git a/src/poly/cl/restart.h b/src/poly/cl/restart.h
-index 995720da..b99938d1 100644
+index 76ec4d745d5..592c06b4028 100644
 --- a/src/poly/cl/restart.h
 +++ b/src/poly/cl/restart.h
-@@ -191,6 +191,13 @@ poly_unroll_geometry(global uint32_t *out_draw,
+@@ -192,6 +192,13 @@ poly_unroll_geometry(global uint32_t *out_draw,
     if (get_num_sub_groups() > 1) {
        barrier(CLK_LOCAL_MEM_FENCE);
        out_ptr = *(uintptr_t *)scratch;

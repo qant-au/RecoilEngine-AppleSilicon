@@ -1,0 +1,42 @@
+From cab52663cf40d1668f0a8a367ab85df6cbb75568 Mon Sep 17 00:00:00 2001
+From: benbreen <8338320+benbreen@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 19:12:24 +1000
+Subject: [PATCH 9/9] kosmickrisp: reset the geometry heap exactly once per
+ command buffer
+
+Do not clear cmd->uses_heap in kk_cmd_buffer_dirty_all_gfx (it runs on
+mid-command-buffer render pass restarts), so a second heap reset cannot
+reallocate from offset 0 and overwrite indices an earlier draw has not yet
+consumed (giant-triangle artifact). uses_heap is still cleared in
+kk_reset_cmd_buffer_internal when the command buffer is recycled.
+
+Ported to mesa-26.3.0-rc3. Only the uses_heap half carries over: rc3 (since
+0126f4388a5, one MTL4CommandBuffer per VkCommandBuffer) encodes the heap
+reset in-line with a barrier, so the original's pre_gfx-encoder ordering
+hunk has no counterpart.
+---
+ src/kosmickrisp/vulkan/kk_cmd_buffer.h | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/kosmickrisp/vulkan/kk_cmd_buffer.h b/src/kosmickrisp/vulkan/kk_cmd_buffer.h
+index 46dfa33f6ec..543f9a0d0a3 100644
+--- a/src/kosmickrisp/vulkan/kk_cmd_buffer.h
++++ b/src/kosmickrisp/vulkan/kk_cmd_buffer.h
+@@ -315,10 +315,13 @@ kk_cmd_buffer_dirty_all_gfx(struct kk_cmd_buffer *cmd)
+    cmd->state.gfx.dirty = ~0u;
+    cmd->state.gfx.descriptors.root_dirty = true;
+ 
+-   /* We just flushed out the heap use. If we want to use it again, we'll need
+-    * to queue a free for it again.
+-    */
+-   cmd->uses_heap = false;
++   /* NOTE: do NOT clear cmd->uses_heap here. This runs on mid-command-buffer
++    * render pass restarts (e.g. around meta blits such as font-atlas uploads).
++    * Clearing it made kk_heap() encode a SECOND heap reset (bottom=0) into the
++    * same command buffer, so a later unroll could reallocate from offset 0 and
++    * overwrite indices an earlier draw had not consumed yet (giant-triangle
++    * artifact in BAR). The heap is reset once per command buffer execution;
++    * uses_heap is cleared when the command buffer is recycled. */
+ }
+ 
+ void kk_cmd_release_dynamic_ds_state(struct kk_cmd_buffer *cmd);

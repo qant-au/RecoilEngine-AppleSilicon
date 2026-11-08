@@ -311,12 +311,10 @@ void CaptureBootDisplayModes(); // defined below (boot display-mode snapshot)
 
 bool CreateContext(SDL_Window* window)
 {
-	// Default the KosmicKrisp Metal shader compiler to fast math (what native
-	// GL drivers effectively run). Safe+Precise (KK's Vulkan-conformance
-	// default) inflates ALU and register pressure — measured 1598 shader
-	// spill events and 32→51.5 fps on the m7 arena from this alone.
-	// Overridable: export KK_MATH_MODE=safe|relaxed|fast before launch.
-	setenv("KK_MATH_MODE", "fast", 0); // 0 = don't overwrite user's value
+	// Shader math mode: since Mesa 26.3 KosmicKrisp compiles every shader in
+	// fast-math mode and marks only the operations that must keep NaN/signed-
+	// zero semantics as safe (upstream bdc3a6afe1a), which is what the old
+	// KK_MATH_MODE=fast knob (our dropped patch 0012) approximated. Nothing to set.
 
 	// remember every display's boot mode for RestoreDesktopDisplayMode
 	CaptureBootDisplayModes();

@@ -1,19 +1,23 @@
-From f55bdb0aa64c7c438bf1b8720755871963f287cd Mon Sep 17 00:00:00 2001
+From 63fa8d5f3a5b024e3ad2db3fe5b1dd547665d630 Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
-Date: Wed, 22 Jul 2026 21:01:10 +0100
-Subject: [PATCH 10/11] zink: do not clear vertex_buffers_dirty on empty/unbind
+Date: Sun, 8 Nov 2026 19:12:15 +1000
+Subject: [PATCH 8/9] zink: do not clear vertex_buffers_dirty on empty/unbind
 
-Only consume the vertex_buffers_dirty flag when bindings are actually emitted (num_bindings>0), and never clear it on an unbind, so a queued rebind survives until a draw with real bindings consumes it.
+Only consume the vertex_buffers_dirty flag when bindings are actually
+emitted (num_bindings>0), and never clear it on an unbind, so a queued
+rebind survives until a draw with real bindings consumes it.
+
+Ported to mesa-26.3.0-rc3, where zink_bind_vertex_buffers moved into
+zink_context.c; the same three sites, same semantics.
 ---
- src/gallium/drivers/zink/zink_context.c | 8 ++++++--
- src/gallium/drivers/zink/zink_draw.cpp  | 6 +++++-
- 2 files changed, 11 insertions(+), 3 deletions(-)
+ src/gallium/drivers/zink/zink_context.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
 
 diff --git a/src/gallium/drivers/zink/zink_context.c b/src/gallium/drivers/zink/zink_context.c
-index 5cd06140..b42e1af6 100644
+index e2777fc30d5..6928b9c9fb2 100644
 --- a/src/gallium/drivers/zink/zink_context.c
 +++ b/src/gallium/drivers/zink/zink_context.c
-@@ -1455,7 +1455,8 @@ zink_bind_vertex_elements_state(struct pipe_context *pctx,
+@@ -1474,7 +1474,8 @@ zink_bind_vertex_elements_state(struct pipe_context *pctx,
     if (cso) {
        if (state->element_state != &ctx->element_state->hw_state) {
           ctx->vertex_state_changed = true;
@@ -23,23 +27,19 @@ index 5cd06140..b42e1af6 100644
        }
        state->element_state = &ctx->element_state->hw_state;
        if (zink_screen(pctx->screen)->optimal_keys)
-@@ -1556,7 +1557,10 @@ zink_set_vertex_buffers_internal(struct pipe_context *pctx,
- #endif
-    }
+@@ -1582,7 +1583,10 @@ zink_set_vertex_buffers_internal(struct pipe_context *pctx,
+    /* avoid potential overdraw conflicts */
+    ctx->can_promote_depth_op = false;
     ctx->vertex_buffers_count = num_buffers;
 -   ctx->vertex_buffers_dirty = num_buffers > 0;
 +   /* never CLEAR pending dirtiness on an unbind: a queued rebind must survive
 +    * until a draw with actual bindings consumes it */
 +   if (num_buffers > 0)
 +      ctx->vertex_buffers_dirty = true;
+    ctx->vertex_buffers_unowned = false;
  }
  
- static void
-diff --git a/src/gallium/drivers/zink/zink_draw.cpp b/src/gallium/drivers/zink/zink_draw.cpp
-index 5ae73125..568c8458 100644
---- a/src/gallium/drivers/zink/zink_draw.cpp
-+++ b/src/gallium/drivers/zink/zink_draw.cpp
-@@ -147,7 +147,11 @@ zink_bind_vertex_buffers(struct zink_context *ctx)
+@@ -1647,7 +1651,11 @@ zink_bind_vertex_buffers_internal(struct zink_context *ctx, const struct pipe_ve
                                    elems->hw_state.num_bindings,
                                    buffers, buffer_offsets, NULL, NULL);
  
@@ -51,4 +51,4 @@ index 5ae73125..568c8458 100644
 +      ctx->vertex_buffers_dirty = false;
  }
  
- ALWAYS_INLINE static void
+ void

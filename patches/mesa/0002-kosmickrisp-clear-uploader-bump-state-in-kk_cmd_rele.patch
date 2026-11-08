@@ -1,7 +1,7 @@
-From 1b0e0fb72701e509a67fbc92bcfef1d8bf281af8 Mon Sep 17 00:00:00 2001
+From c10f551b966a16474ab074a9e74a598b03608f04 Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
 Date: Wed, 22 Jul 2026 21:00:41 +0100
-Subject: [PATCH 04/11] kosmickrisp: clear uploader bump state in
+Subject: [PATCH 2/9] kosmickrisp: clear uploader bump state in
  kk_cmd_release_resources
 
 NULL the uploader bo/offset when the BO list is freed so a resubmitted command buffer (e.g. WSI swapchain blit) does not keep bumping into a BO already returned to the pool (stale-descriptor rendering corruption).
@@ -10,10 +10,10 @@ NULL the uploader bo/offset when the BO list is freed so a resubmitted command b
  1 file changed, 11 insertions(+)
 
 diff --git a/src/kosmickrisp/vulkan/kk_cmd_buffer.c b/src/kosmickrisp/vulkan/kk_cmd_buffer.c
-index 31c2e49e..8a69b666 100644
+index 22f4bf7f3f1..ccef4d25bd9 100644
 --- a/src/kosmickrisp/vulkan/kk_cmd_buffer.c
 +++ b/src/kosmickrisp/vulkan/kk_cmd_buffer.c
-@@ -41,6 +41,17 @@ kk_cmd_release_resources(struct kk_device *dev, struct kk_cmd_buffer *cmd)
+@@ -48,6 +48,17 @@ kk_cmd_release_resources(struct kk_device *dev, struct kk_cmd_buffer *cmd)
  
     kk_cmd_pool_free_bo_list(pool, &cmd->uploader.bos);
  
