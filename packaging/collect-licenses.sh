@@ -26,8 +26,11 @@ grab() { # grab <dest-name> <candidate paths...>
 brewdir() { brew --prefix "$1" 2>/dev/null || echo "/nonexistent"; }
 
 grab GPL-2.0.txt            "$SRC/COPYING"
-grab LGPL-2.1.txt           "$(brewdir openal-soft)/COPYING" "$(brewdir openal-soft)/share/licenses/openal-soft/COPYING"
-grab FTL.txt                "$(brewdir freetype)/LICENSE.TXT" "$(brewdir freetype)/docs/FTL.TXT"
+# Third-party libraries built from pinned source (scripts/build-static-libs.sh,
+# build-shared-libs.sh) carry their own licence texts in their prefixes.
+STATIC_LIC="$BAR/deps/static/share/licenses"; SHARED_LIC="$BAR/deps/shared/share/licenses"
+grab LGPL-2.1.txt           "$SHARED_LIC/openal-soft-LGPL-2.1.txt"
+grab FTL.txt                "$SHARED_LIC/freetype-FTL.txt"
 # SDL: the source-built SDL2 the bundle ships (build-sdl2.sh) first; Homebrew's
 # "sdl2" is now sdl2-compat, whose licence text is not the shipped library's.
 grab Zlib.txt               "$(ls "$BAR"/deps/SDL2-*/LICENSE.txt 2>/dev/null | tail -1)" "/opt/homebrew/opt/sdl2/LICENSE.txt" "$(brewdir sdl2)/LICENSE.txt" "$(brewdir sdl2)/share/licenses/sdl2/LICENSE.txt"
@@ -47,15 +50,12 @@ fi
     [ -n "$f" ] && { echo; echo "==== $c ===="; cat "$f"; }
   done
   echo; echo "==== Fontconfig ===="
-  cat "$(brewdir fontconfig)/COPYING" 2>/dev/null || echo "(see fontconfig source COPYING)"
-  # current Homebrew freetype links brotli (decoder for WOFF2 fonts)
-  echo; echo "==== brotli ===="
-  cat "$(brewdir brotli)/LICENSE" 2>/dev/null || echo "(see brotli source LICENSE)"
+  cat "$SHARED_LIC/fontconfig.txt" || exit 1
 } > "$DEST/MIT-collection.txt"
 
 # BSD-3 collection
 {
-  for pair in "libogg:$(brewdir libogg)/COPYING" "libvorbis:$(brewdir libvorbis)/COPYING" \
+  for pair in "libogg:$STATIC_LIC/libogg.txt" "libvorbis:$STATIC_LIC/libvorbis.txt" \
               "zstd:$(brewdir zstd)/LICENSE"; do
     name=${pair%%:*}; path=${pair#*:}
     echo "==== $name ===="
@@ -68,27 +68,24 @@ fi
   cat "$SRC/rts/lib/tracy/LICENSE" 2>/dev/null || true
 } > "$DEST/BSD-3-Clause-collection.txt"
 
-# Image-codec collection (DevIL/libtiff transitive deps pulled in by the
-# recursive bundler)
+# Image, archive and compression libraries linked statically into the engine
+# (the spring-static-libs set, scripts/build-static-libs.sh)
 {
-  for pair in "libpng:/opt/homebrew/opt/libpng/LICENSE" \
-              "jpeg-turbo:/opt/homebrew/opt/jpeg-turbo/LICENSE.md" \
-              "libtiff:/opt/homebrew/opt/libtiff/LICENSE.md" \
-              "libwebp:/opt/homebrew/opt/webp/COPYING" \
-              "little-cms2:/opt/homebrew/opt/little-cms2/LICENSE" \
-              "jasper:/opt/homebrew/opt/jasper/LICENSE.txt" \
-              "xz-liblzma:/opt/homebrew/opt/xz/COPYING.0BSD"; do
+  for pair in "libpng:$STATIC_LIC/libpng.txt" \
+              "libjpeg (IJG, README legal section):$STATIC_LIC/libjpeg-README.txt" \
+              "libtiff:$STATIC_LIC/libtiff.txt" \
+              "giflib:$STATIC_LIC/giflib.txt" \
+              "zlib:$STATIC_LIC/zlib.txt" \
+              "minizip-ng:$STATIC_LIC/minizip-ng.txt" \
+              "xz-liblzma:$STATIC_LIC/liblzma-0BSD.txt"; do
     name=${pair%%:*}; path=${pair#*:}
     echo "==== $name ===="
     cat "$path" 2>/dev/null || { echo "MISSING $name license"; exit 1; }
     echo
   done
 } > "$DEST/image-codecs-collection.txt"
-cp /opt/homebrew/opt/gettext/COPYING "$DEST/LGPL-2.1-gettext.txt" 2>/dev/null || true
-
-# DevIL (LGPL) — same LGPL-2.1 text applies; ensure its own copy if present
-f="$(brewdir devil)/COPYING"
-[ -f "$f" ] && cp "$f" "$DEST/LGPL-2.1-DevIL.txt"
+# DevIL (LGPL-2.1), linked statically: its own copy of the licence text
+grab LGPL-2.1-DevIL.txt     "$STATIC_LIC/DevIL-LGPL-2.1.txt"
 
 if [ "$fail" -ne 0 ]; then
   echo "collect-licenses: FAILED"; exit 1
