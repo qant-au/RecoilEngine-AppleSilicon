@@ -29,6 +29,9 @@ while [ $# -gt 0 ]; do
 done
 
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+# Deployment target: see build-mesa-kk.sh. Exported before build-mesa-kk.sh runs so
+# the driver and the engine always agree.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 DEPS="$BAR/deps"
 SRC="${ENGINE_SRC:-$([ -d "$BAR/rts" ] && echo "$BAR" || echo "$BAR/engine")}"
 BUILD="${ENGINE_BUILD:-$BAR/build-engine}"
@@ -94,6 +97,7 @@ fi
 
 cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG $PREFIX_MAP" \
   -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG $PREFIX_MAP" \
@@ -211,6 +215,8 @@ echo "=== artifact verification ==="
 for b in spring spring-headless; do
   test -f "$BUILD/$b" || { echo "FATAL: $b missing"; exit 1; }
   file "$BUILD/$b" | grep -q arm64 || { echo "FATAL: $b not arm64"; exit 1; }
+  m=$(vtool -show-build "$BUILD/$b" | awk '/minos/{print $2; exit}')
+  [ "$m" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "FATAL: $b minos $m, want $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
 done
 file "$BUILD/tools/pr-downloader/src/pr-downloader"
 echo "--- spring links:"

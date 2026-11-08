@@ -22,6 +22,11 @@
 set -euo pipefail
 
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+# Deployment target: the floor the shipped bundle declares (LSMinimumSystemVersion,
+# packaging/release-build.sh). macOS 27.0 since 2026-11-08 (was 26.0, KosmicKrisp
+# needs Metal 4). Without it clang defaults to the BUILD host's OS, so the floor
+# silently follows whichever Mac built it. clang, swiftc, meson and cmake all read it.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 DEPS="$BAR/deps"
 MESA_COMMIT="8f272b1fe18e95366386a075f2df0db4e9ea78b9"   # full SHA, pinned (verified to render BAR on KosmicKrisp)
 SPIRV_XLAT_TAG="v19.1.7"
@@ -36,6 +41,7 @@ patch_list() { ls "$PATCH_DIR"/*.patch 2>/dev/null | sort; }
 want_stamp() {
   echo "mesa_commit=$MESA_COMMIT"
   echo "spirv_xlat=$SPIRV_XLAT_TAG"
+  echo "macos_target=$MACOSX_DEPLOYMENT_TARGET"
   local p
   for p in $(patch_list); do
     echo "patch=$(basename "$p"):$(shasum -a 256 "$p" | cut -d' ' -f1)"
@@ -229,6 +235,13 @@ for d in "$MESA_PREFIX"/lib/*.dylib; do
   hits="$(LC_ALL=C grep -a -o '/Users/[^ "]\{0,120\}' "$d" 2>/dev/null | LC_ALL=C grep -v "^$MESA_PREFIX/lib/" | LC_ALL=C sort -u || true)"
   [ -z "$hits" ] || { n=$(echo "$hits" | wc -l | tr -d ' '); echo "FATAL: $(basename "$d") embeds $n /Users/ path(s):"; echo "$hits" | head -5 | sed 's/^/    /'; leaks=$((leaks+n)); }
 done
+# The driver must load on the declared floor: fail if any dylib's minos is above it.
+for d in "$MESA_PREFIX"/lib/*.dylib; do
+  [ -L "$d" ] && continue
+  m=$(vtool -show-build "$d" 2>/dev/null | awk '/minos/{print $2; exit}')
+  [ "$m" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "FATAL: $(basename "$d") minos $m, want $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
+done
+echo "driver deployment target: all dylibs minos $MACOSX_DEPLOYMENT_TARGET"
 [ "$leaks" -eq 0 ] || { echo "FATAL: driver embeds $leaks builder-path string(s) — see LESSON-41"; exit 1; }
 echo "driver path-leak scan: 0 /Users/ strings across $(ls "$MESA_PREFIX"/lib/*.dylib | wc -l | tr -d ' ') dylibs"
 
