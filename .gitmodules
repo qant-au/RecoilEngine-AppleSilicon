@@ -3,11 +3,12 @@
 	url = https://github.com/spring/pyunitsync.git
 [submodule "tools/pr-downloader"]
 	path = tools/pr-downloader
-	url = https://github.com/ExaDev/pr-downloader
+	url = https://github.com/qant-au/pr-downloader.git
+	branch = macos-2026.09.02
 [submodule "AI/Skirmish/BARb"]
 	path = AI/Skirmish/BARb
 	url = https://github.com/qant-au/CircuitAI.git
-	branch = macos-arm64
+	branch = macos-arm64-2026.09.02
 [submodule "AI/Skirmish/CircuitAI"]
 	path = AI/Skirmish/CircuitAI
 	url = https://github.com/rlcevg/CircuitAI.git
