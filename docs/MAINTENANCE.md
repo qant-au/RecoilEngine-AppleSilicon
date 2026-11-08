@@ -47,6 +47,8 @@ runs.
 - **Remotes:** `origin` = this repository; `upstream` =
   `beyond-all-reason/RecoilEngine` (fetch-only, for tags);
   `benbreen` = the original port (fetch-only, inactive since 2026-08).
+  `vandomas` = Vandomas/RecoilEngine-AppleSilicon, another fork of the original
+  port (fetch-only; reviewed 2026-11-09 for work to bring in, with credit).
 - **Already upstream as of 2026.09.01/2026.09.02** (drop ours at that rebase,
   take upstream's): the float->short heading UB fix (`da974d379b`, #3342;
   replaces our `8a041014a2`; once the fleet runs it, sync must match upstream's
