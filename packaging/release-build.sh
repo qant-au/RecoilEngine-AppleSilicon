@@ -20,6 +20,10 @@
 set -euo pipefail
 # One macOS floor for every binary and the Info.plist (see scripts/build-mesa-kk.sh).
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+# swiftc ignores MACOSX_DEPLOYMENT_TARGET and defaults to the BUILD host's macOS
+# (on 27.2 the helpers came out minos 27.2 against a 27.0 floor), so every bundled
+# Swift helper gets the target explicitly.
+SWIFT_TARGET="arm64-apple-macos$MACOSX_DEPLOYMENT_TARGET"
 
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 PKG="$BAR/packaging"
@@ -263,14 +267,17 @@ if [ "$PROFILE" = "bar" ]; then
   cp "$PKG/launcher.sh" "$MACOS/launcher"
   chmod +x "$MACOS/launcher" "$RESOURCES/download-content.sh"
   # first-run consent + progress window + error dialog (native AppKit helpers)
-  swiftc -O -o "$MACOS/progress-window" "$PKG/progress-window.swift" \
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/progress-window" "$PKG/progress-window.swift" \
     || { echo "FATAL: progress-window.swift failed to compile"; exit 1; }
-  swiftc -O -o "$MACOS/error-dialog" "$PKG/error-dialog.swift" \
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/error-dialog" "$PKG/error-dialog.swift" \
     || { echo "FATAL: error-dialog.swift failed to compile"; exit 1; }
-  swiftc -O -o "$MACOS/consent-dialog" "$PKG/consent-dialog.swift" \
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/consent-dialog" "$PKG/consent-dialog.swift" \
     || { echo "FATAL: consent-dialog.swift failed to compile"; exit 1; }
-  swiftc -O -o "$MACOS/message-check" "$PKG/message-check.swift" \
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/message-check" "$PKG/message-check.swift" \
     || { echo "FATAL: message-check.swift failed to compile"; exit 1; }
+  # spring-launcher protocol bridge for the lobby (replays, downloads); see sl-bridge.swift
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/sl-bridge" "$PKG/sl-bridge.swift" \
+    || { echo "FATAL: sl-bridge.swift failed to compile"; exit 1; }
 fi
 # base content archives (engine-built sdz)
 mkdir -p "$RESOURCES/base"
