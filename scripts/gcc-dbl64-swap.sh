@@ -36,7 +36,7 @@ echo "[gcc-dbl64-swap] source tree: $SRC_ROOT"
 OBJDIR=$BUILD/rts/lib/streflop/CMakeFiles/streflop.dir/libm/dbl-64
 ARCHIVE=$BUILD/rts/lib/streflop/libstreflop.a
 
-[ -x "$GXX" ] || { echo "gcc not found: $GXX"; exit 1; }
+[ -x "$GXX" ] || { echo "FATAL: gcc not found: $GXX (brew install gcc@15; the dbl-64 swap needs exactly gcc 15, the fleet libm hashes were generated with it)"; exit 1; }
 [ -f "$ARCHIVE" ] || { echo "archive missing (build streflop first): $ARCHIVE"; exit 1; }
 
 FLAGS=(

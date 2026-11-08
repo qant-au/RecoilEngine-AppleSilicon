@@ -410,6 +410,11 @@ endif()
 	add_spring_test(${test_name} "${test_src}" "${test_libs}" "${test_flags}")
 	target_include_directories(test_${test_name} PRIVATE ${ENGINE_SOURCE_DIR}/lib/)
 	add_dependencies(test_${test_name} springcontent.sdz)
+	if (APPLE)
+		# macOS data-dir discovery does not search the build tree the way Linux
+		# does, so unitsync cannot find base/springcontent.sdz without this.
+		set_tests_properties(test${test_name} PROPERTIES ENVIRONMENT "SPRING_DATADIR=${CMAKE_BINARY_DIR}")
+	endif ()
 
 ################################################################################
 ### ThreadPool

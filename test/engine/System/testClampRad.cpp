@@ -42,11 +42,14 @@ TEST_CASE("ClampRad")
 	// Test with +0.0f and verify the result is not negative zero (signbit returns false)
 	CHECK_FALSE(std::signbit(ClampRad(0.0f)));
 
-	// Test TAANG2RAD conversion to short for [0, 2pi)
-	CHECK(static_cast<short>(ClampRad(0.0f) * RAD2TAANG) == short(0));
-	CHECK(static_cast<short>(ClampRad(+std::nextafterf(math::TWOPI, -std::numeric_limits<float>::infinity())) * RAD2TAANG) == short(-1));
-	CHECK(static_cast<short>(ClampRad(+std::nextafterf(       0.0f, +std::numeric_limits<float>::infinity())) * RAD2TAANG) == short( 0));
-	CHECK(static_cast<short>(ClampRad(+std::nextafterf(TAANG2RAD  , +std::numeric_limits<float>::infinity())) * RAD2TAANG) == short(+1));
+	// Test TAANG2RAD conversion to short for [0, 2pi). Convert through int: a
+	// direct float->short cast of ~65535.99 is out of range (undefined behaviour);
+	// x86 gcc happens to wrap it to -1, clang/arm64 folds the comparison away.
+	// float->int->short is defined and matches the sim code (short(int(x))).
+	CHECK(static_cast<short>(static_cast<int>(ClampRad(0.0f) * RAD2TAANG)) == short(0));
+	CHECK(static_cast<short>(static_cast<int>(ClampRad(+std::nextafterf(math::TWOPI, -std::numeric_limits<float>::infinity())) * RAD2TAANG)) == short(-1));
+	CHECK(static_cast<short>(static_cast<int>(ClampRad(+std::nextafterf(       0.0f, +std::numeric_limits<float>::infinity())) * RAD2TAANG)) == short( 0));
+	CHECK(static_cast<short>(static_cast<int>(ClampRad(+std::nextafterf(TAANG2RAD  , +std::numeric_limits<float>::infinity())) * RAD2TAANG)) == short(+1));
 }
 
 TEST_CASE("ClampRadPi")
