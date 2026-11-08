@@ -28,19 +28,23 @@ BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 # silently follows whichever Mac built it. clang, swiftc, meson and cmake all read it.
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 DEPS="$BAR/deps"
-MESA_COMMIT="8f272b1fe18e95366386a075f2df0db4e9ea78b9"   # full SHA, pinned (verified to render BAR on KosmicKrisp)
+MESA_COMMIT="90a959ebba9dbb36f2ea5176091c15d6ebdd0af0"   # mesa-26.3.0-rc3 (was 8f272b1fe18e, 26.2.0-devel, 2026-06-13)
 SPIRV_XLAT_TAG="v19.1.7"
 MESA_PREFIX="${MESA_PREFIX:-$DEPS/mesa-native}"           # driver install prefix
 MESA_SRC="${MESA_SRC:-$DEPS/mesa-src}"
 PATCH_DIR="${MESA_PATCH_DIR:-$BAR/patches/mesa}"
 FORCE="${MESA_FORCE_REBUILD:-0}"
 mkdir -p "$DEPS"
+# Driver runtime deps from pinned source (Vulkan loader, SPIRV-Tools, zstd), built
+# first: their provenance is part of the driver's stamp below.
+DRIVER_DEPS="$("$BAR/scripts/build-driver-deps.sh")"
 
 # ---- provenance: what driver SHOULD be at the prefix -----------------------
 patch_list() { ls "$PATCH_DIR"/*.patch 2>/dev/null | sort; }
 want_stamp() {
   echo "mesa_commit=$MESA_COMMIT"
   echo "spirv_xlat=$SPIRV_XLAT_TAG"
+  echo "driver_deps=$(cat "$DEPS/driver-deps/.provenance" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
   echo "macos_target=$MACOSX_DEPLOYMENT_TARGET"
   local p
   for p in $(patch_list); do
@@ -145,6 +149,9 @@ python3 -m venv "$DEPS/mesa-venv"
 # the shipped driver dylibs embed no absolute build path. Maps
 # $BAR -> "." for preprocessor (-ffile-prefix-map) and debug info
 # (-fdebug-prefix-map), across C / C++ / Obj-C / Obj-C++. Path-string only.
+# Link search: driver-deps (static zstd, SPIRV-Tools) only. Homebrew's static LLVM
+# asks for -lzstd -lxml2 -lz; with -L/opt/homebrew/lib here -lzstd resolved to
+# Homebrew's dylib. libxml2 and libz come from the macOS SDK.
 cat > "$DEPS/plain-native.ini" <<INI
 [binaries]
 c = '/usr/bin/clang'
@@ -157,10 +164,10 @@ c_args = ['-ffile-prefix-map=$BAR=.','-fdebug-prefix-map=$BAR=.']
 cpp_args = ['-ffile-prefix-map=$BAR=.','-fdebug-prefix-map=$BAR=.']
 objc_args = ['-ffile-prefix-map=$BAR=.','-fdebug-prefix-map=$BAR=.']
 objcpp_args = ['-ffile-prefix-map=$BAR=.','-fdebug-prefix-map=$BAR=.']
-c_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L/opt/homebrew/lib']
-cpp_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L/opt/homebrew/lib']
-objc_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L/opt/homebrew/lib']
-objcpp_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L/opt/homebrew/lib']
+c_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L$DRIVER_DEPS/lib']
+cpp_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L$DRIVER_DEPS/lib']
+objc_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L$DRIVER_DEPS/lib']
+objcpp_link_args = ['-Wl,-lto_library,$L19/lib/libLTO.dylib','-L$DRIVER_DEPS/lib']
 INI
 
 source "$DEPS/mesa-venv/bin/activate"
@@ -180,16 +187,21 @@ STAGE="$DEPS/mesa-stage"
 
 rm -rf build-native "$STAGE"
 meson setup build-native --native-file "$DEPS/plain-native.ini" \
-  --pkg-config-path "$DEPS/spirv-xlat-install/lib/pkgconfig${CLC_PC:+,$CLC_PC}" \
+  --pkg-config-path "$DRIVER_DEPS/lib/pkgconfig,$DEPS/spirv-xlat-install/lib/pkgconfig${CLC_PC:+,$CLC_PC}" \
+  --cmake-prefix-path "$DRIVER_DEPS" \
   -Dprefix="$NEUTRAL_PREFIX" -Dplatforms=macos \
   -Degl-native-platform=surfaceless -Degl=enabled -Dglx=disabled \
   -Dgallium-drivers=zink -Dvulkan-drivers=kosmickrisp \
   -Dmoltenvk-dir=/opt/homebrew/opt/molten-vk \
-  -Dllvm=enabled -Dshared-llvm=disabled -Dbuildtype=release
+  -Dllvm=enabled -Dshared-llvm=disabled -Dbuildtype=release \
+  -Dprefer_static=true  # take driver-deps' static zstd/SPIRV-Tools, never a Homebrew dylib
 DESTDIR="$STAGE" ninja -C build-native install
 
 # relocate the neutral prefix tree into the real install location
 test -d "$STAGE$NEUTRAL_PREFIX" || { echo "FATAL: staged install missing $STAGE$NEUTRAL_PREFIX"; exit 1; }
+# replace, never overlay: a previous version's libgallium-<ver>.dylib would
+# otherwise stay beside the new one and be bundled too
+rm -rf "$MESA_PREFIX"
 mkdir -p "$MESA_PREFIX"
 (cd "$STAGE$NEUTRAL_PREFIX" && tar cf - .) | (cd "$MESA_PREFIX" && tar xf -)
 rm -rf "$STAGE"

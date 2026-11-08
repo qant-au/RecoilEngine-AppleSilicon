@@ -34,7 +34,8 @@ grab FTL.txt                "$SHARED_LIC/freetype-FTL.txt"
 # SDL: the source-built SDL2 the bundle ships (build-sdl2.sh) first; Homebrew's
 # "sdl2" is now sdl2-compat, whose licence text is not the shipped library's.
 grab Zlib.txt               "$(ls "$BAR"/deps/SDL2-*/LICENSE.txt 2>/dev/null | tail -1)" "/opt/homebrew/opt/sdl2/LICENSE.txt" "$(brewdir sdl2)/LICENSE.txt" "$(brewdir sdl2)/share/licenses/sdl2/LICENSE.txt"
-grab Apache-2.0.txt         "$(brewdir spirv-tools)/LICENSE" "$SRC/rts/lib/simdjson/LICENSE"
+DRV_LIC="$BAR/deps/driver-deps/share/licenses"
+grab Apache-2.0.txt         "$DRV_LIC/Vulkan-Loader-Apache-2.0.txt"
 # curl text only required when a curl dylib is actually bundled (system
 # libcurl needs no shipped text)
 if ls "${BUNDLE_FRAMEWORKS:-/nonexistent}"/libcurl* >/dev/null 2>&1; then
@@ -56,7 +57,7 @@ fi
 # BSD-3 collection
 {
   for pair in "libogg:$STATIC_LIC/libogg.txt" "libvorbis:$STATIC_LIC/libvorbis.txt" \
-              "zstd:$(brewdir zstd)/LICENSE"; do
+              "zstd:$DRV_LIC/zstd-BSD.txt"; do
     name=${pair%%:*}; path=${pair#*:}
     echo "==== $name ===="
     cat "$path" 2>/dev/null || { echo "MISSING $name"; }

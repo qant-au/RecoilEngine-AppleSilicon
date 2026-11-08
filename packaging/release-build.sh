@@ -407,7 +407,8 @@ cp "$MESA_PREFIX"/lib/libvulkan_kosmickrisp.dylib "$FRAMEWORKS/"
 # zink dlopens at runtime — dev machines silently supplied it from
 # /opt/homebrew/lib via env; user machines have nothing there (caught by the
 # 6d GUI smoke: "ZINK: failed to load libvulkan.1.dylib")
-cp -L /opt/homebrew/lib/libvulkan.1.dylib "$FRAMEWORKS/libvulkan.1.dylib"
+# built from pinned source by scripts/build-driver-deps.sh, never a Homebrew bottle
+cp -L "$BAR/deps/driver-deps/lib/libvulkan.1.dylib" "$FRAMEWORKS/libvulkan.1.dylib"
 # normalize install-name IDs of directly-staged driver dylibs (bundle_deps
 # only re-IDs libraries it discovers as dependencies)
 for d in "$FRAMEWORKS"/*.dylib; do
@@ -449,7 +450,10 @@ bundle_deps() { # bundle_deps <macho> [<source-dir-for-@rpath-siblings>]
         # already-bundled name: nothing to do. Otherwise resolve the sibling.
         if [ ! -f "$FRAMEWORKS/$base" ]; then
           cand=""
-          for rd in "$srcdir" /opt/homebrew/lib; do
+          # sibling of the library that names it only; no /opt/homebrew/lib
+          # fallback: every bundled library is built from pinned source, so a
+          # name only Homebrew can satisfy is a leak the closure audit must stop
+          for rd in "$srcdir"; do
             [ -n "$rd" ] && [ -f "$rd/$base" ] && { cand="$rd/$base"; break; }
           done
           if [ -n "$cand" ]; then
