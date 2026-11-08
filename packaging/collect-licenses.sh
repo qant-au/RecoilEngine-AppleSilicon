@@ -28,7 +28,9 @@ brewdir() { brew --prefix "$1" 2>/dev/null || echo "/nonexistent"; }
 grab GPL-2.0.txt            "$SRC/COPYING"
 grab LGPL-2.1.txt           "$(brewdir openal-soft)/COPYING" "$(brewdir openal-soft)/share/licenses/openal-soft/COPYING"
 grab FTL.txt                "$(brewdir freetype)/LICENSE.TXT" "$(brewdir freetype)/docs/FTL.TXT"
-grab Zlib.txt               "/opt/homebrew/opt/sdl2/LICENSE.txt" "$(brewdir sdl2)/LICENSE.txt" "$(brewdir sdl2)/share/licenses/sdl2/LICENSE.txt"
+# SDL: the source-built SDL2 the bundle ships (build-sdl2.sh) first; Homebrew's
+# "sdl2" is now sdl2-compat, whose licence text is not the shipped library's.
+grab Zlib.txt               "$(ls "$BAR"/deps/SDL2-*/LICENSE.txt 2>/dev/null | tail -1)" "/opt/homebrew/opt/sdl2/LICENSE.txt" "$(brewdir sdl2)/LICENSE.txt" "$(brewdir sdl2)/share/licenses/sdl2/LICENSE.txt"
 grab Apache-2.0.txt         "$(brewdir spirv-tools)/LICENSE" "$SRC/rts/lib/simdjson/LICENSE"
 # curl text only required when a curl dylib is actually bundled (system
 # libcurl needs no shipped text)
