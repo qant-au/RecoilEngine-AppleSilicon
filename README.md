@@ -34,7 +34,7 @@ from its official online location and configures the engine to play it.
 
 <p align="center">
   <a href="https://github.com/benbreen/RecoilEngine-AppleSilicon/releases/latest"><b>⬇&nbsp; Download for macOS (Apple Silicon)</b></a>
-  &nbsp;·&nbsp; engine port + optional BAR launcher &nbsp;·&nbsp; macOS 26+
+  &nbsp;·&nbsp; engine port + optional BAR launcher &nbsp;·&nbsp; macOS 27+
 </p>
 
 > [!CAUTION]
@@ -164,7 +164,7 @@ build.
 ## Requirements
 
 - Apple Silicon Mac so far tested on M2 and above.
-- macOS 26+.
+- macOS 27+.
 - Internet connection - Game content downloads from the official BAR content network on first run
 
 ## Known limitations (honest ones)
@@ -191,7 +191,7 @@ Everything needed ships in this repository — the engine source, the Mesa
 patch series (`patches/mesa/`), the driver/engine build scripts
 (`scripts/`), and the packaging pipeline (`packaging/`, `Makefile`).
 
-Prerequisites: an Apple Silicon Mac on macOS 26+, Xcode Command Line Tools,
+Prerequisites: an Apple Silicon Mac on macOS 27+, Xcode Command Line Tools,
 and [Homebrew](https://brew.sh) — the build installs the packages it needs
 (SDL2, LLVM 19 for the driver compile, openal-soft, …) as it goes.
 

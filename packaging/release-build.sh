@@ -18,6 +18,8 @@
 # not pass Gatekeeper on other machines). Notarization runs only when both
 # --identity and --notary-profile are given.
 set -euo pipefail
+# One macOS floor for every binary and the Info.plist (see scripts/build-mesa-kk.sh).
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 PKG="$BAR/packaging"
@@ -575,7 +577,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>EngineVersion</key><string>${VERSION}</string>
   <key>PortVersion</key><string>${PORTVER}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>LSMinimumSystemVersion</key><string>26.0</string>
+  <key>LSMinimumSystemVersion</key><string>$MACOSX_DEPLOYMENT_TARGET</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.strategy-games</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
