@@ -56,6 +56,11 @@ if     (USERDOCS_PLAIN OR userdoc_INSTALL_HTML)
 	macro    (userdoc_enlist name)
 		set(userdoc_file_plain_${name} "${CMAKE_SOURCE_DIR}/${name}.markdown")
 		if     (NOT EXISTS "${userdoc_file_plain_${name}}")
+			# The macOS layer keeps upstream's README as README-upstream.markdown
+			# (its own README.md is the repository front page).
+			set(userdoc_file_plain_${name} "${CMAKE_SOURCE_DIR}/${name}-upstream.markdown")
+		endif  ()
+		if     (NOT EXISTS "${userdoc_file_plain_${name}}")
 			set(userdoc_file_plain_${name} "${CMAKE_SOURCE_DIR}/${name}")
 		endif  ()
 
