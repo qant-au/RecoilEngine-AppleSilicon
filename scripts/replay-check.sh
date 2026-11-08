@@ -12,8 +12,10 @@
 #                      ENGINE_BUILD defaults to build-engine/)
 #   --content <dir>    data dir holding the game, map and lobby packages the demo
 #                      needs (default: the launcher's write dir)
-#   --timeout <secs>   wall-clock limit (default 7200). Replays run at 1x game
-#                      speed, so allow at least the game's own length.
+#   --speed <x>        playback speed (default 20; engine knob SPRING_DEMO_SPEED,
+#                      demos only). Sync is checked identically at any speed;
+#                      a 36 min 8v8 took 7 min at 20x on an M3 Ultra (CPU-bound).
+#   --timeout <secs>   wall-clock limit (default 7200).
 #   --log <file>       where to keep the engine log (default: a temp file)
 # Prints REPLAY_SYNC_OK and exits 0 on a clean run to the end of the demo;
 # prints REPLAY_SYNC_FAIL <reason> and exits 1 otherwise. A demo recorded on a
@@ -42,12 +44,13 @@ set -uo pipefail
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 DEMO=""; ENGINE="${ENGINE_BUILD:-$BAR/build-engine}/spring-headless"
 CONTENT="$HOME/Library/Application Support/Beyond-All-Reason-mac"
-TIMEOUT=7200; LOG=""
+TIMEOUT=7200; LOG=""; SPEED=20
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE=$2; shift 2;;
     --content) CONTENT=$2; shift 2;;
     --timeout) TIMEOUT=$2; shift 2;;
+    --speed) SPEED=$2; shift 2;;
     --log) LOG=$2; shift 2;;
     -*) echo "unknown option: $1"; exit 2;;
     *) DEMO=$1; shift;;
@@ -75,12 +78,15 @@ trap 'rm -rf "$WD/LuaUI" "$WD/cache" 2>/dev/null' EXIT
 echo "replay-check: $(basename "$DEMO") on $BIN_VER ($ENGINE)"
 START=$(date +%s)
 # The engine dir goes on SPRING_DATADIR for its own base content (springcontent).
-SPRING_DATADIR="$CONTENT:$ENGINE_DIR" "$TIMEOUT_BIN" "$TIMEOUT" \
+SPRING_DEMO_SPEED="$SPEED" SPRING_DATADIR="$CONTENT:$ENGINE_DIR" "$TIMEOUT_BIN" "$TIMEOUT" \
   "$ENGINE" --write-dir "$WD" "$DEMO" > "$LOG" 2>&1
 RC=$?
 SECS=$(( $(date +%s) - START ))
 LAST_FRAME=$(grep -oE '\[f=[0-9]+\]' "$LOG" | tail -1 | tr -dc '0-9' | sed 's/^0*//')
 DESYNCS=$(grep -c 'DESYNC WARNING' "$LOG")
+# the game's own end (BAR logs <autoquit> there); later frames are post-game
+# filler while autoquit waits, with no recorded checksums to compare
+END_FRAME=$(grep -m1 '<autoquit>' "$LOG" | grep -oE '\[f=[0-9]+\]' | tr -dc '0-9' | sed 's/^0*//')
 
 if ! grep -q 'Beginning demo playback' "$LOG"; then
   echo "REPLAY_SYNC_FAIL playback never started (missing game/map content?) - see $LOG"
@@ -96,4 +102,4 @@ if [ "$RC" -ne 0 ]; then
   echo "REPLAY_SYNC_FAIL engine exit $RC after ${SECS}s at frame ${LAST_FRAME:-?} (124 = timeout) - see $LOG"
   exit 1
 fi
-echo "REPLAY_SYNC_OK frames=${LAST_FRAME:-?} desyncs=0 wall=${SECS}s log=$LOG"
+echo "REPLAY_SYNC_OK game_end_frame=${END_FRAME:-?} last_frame=${LAST_FRAME:-?} desyncs=0 speed=${SPEED}x wall=${SECS}s log=$LOG"
