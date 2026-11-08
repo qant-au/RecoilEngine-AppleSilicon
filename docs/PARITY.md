@@ -6,7 +6,7 @@ Every row is measured, dated and re-checkable with the command beside it; where 
 two differ, the difference is either forced by the platform and stated, or open and
 linked to the work that closes it.
 
-**Measured: 2026-11-08**, macOS 27.2 on an M3 Ultra, engine `2026.07.04`.
+**Measured: 2026-11-08** (engine row and simulation re-measured 2026-11-09), macOS 27.2 on an M3 Ultra, engine `2026.09.02`.
 Update the date and the evidence column whenever a row is re-measured; a row that
 has not been re-checked after a change to the thing it measures is stale.
 
@@ -28,9 +28,9 @@ has not been re-checked after a change to the thing it measures is stale.
 
 | Area | Windows / Linux (official) | macOS (this repository) | Status | Evidence / re-check |
 |---|---|---|---|---|
-| Engine version | upstream tag `2026.07.04` (BAR production) | same tag + macOS layer | **match** | `build-engine/spring --version`; production engine in BYAR-Chobby `dist_cfg/config.json` |
-| Simulation vs fleet recordings | reference | full 36.5 min 8v8 and a 1v1 recorded on the fleet: 0 desyncs | **match** | `scripts/replay-check.sh <demo>` (REPLAY_SYNC_OK); `docs/SYNC_VALIDATION.md` §3a |
-| Simulation on this repository's own Linux build | — | same two replays, 0 desyncs, on amd64 Linux built from this tree | **match** (the macOS layer keeps non-Mac builds exact) | `docs/SYNC_VALIDATION.md` §3a |
+| Engine version | BAR production: `2026.07.04`; BAR Engine Test: `2026.09.02` | upstream tag `2026.09.02` + macOS layer | **match with Engine Test; ahead of production** (by decision: releases target the engine BAR is moving to) | `build-engine/spring --version`; engines per setup in BYAR-Chobby `dist_cfg/config.json` |
+| Simulation vs fleet recordings | reference | 2026.09.02: a 13.6 min 1v1 recorded on the fleet, 0 desyncs (2026.07.04: a 36.5 min 8v8 and a 1v1, 0 desyncs) | **match** | `scripts/replay-check.sh <demo>` (REPLAY_SYNC_OK); `docs/SYNC_VALIDATION.md` §3a, §3b |
+| Simulation on this repository's own Linux build | — | on 2026.07.04: both replays, 0 desyncs, on amd64 Linux built from this tree; not re-run on 2026.09.02 | **stale** (re-run before release) | `docs/SYNC_VALIDATION.md` §3a |
 | libm / FP parity | gcc fleet build | gcc-15 dbl-64 swap; 9/9 hashes; streflop BIT-EXACT vs SSE (47,852) and NEON (52,080) | **match** | `scripts/build-engine.sh` gate; `scripts/run-synctest.sh` |
 | Live multiplayer | BAR servers | LAN and cross-platform play proven by the original port; **online disabled** in builds from this repository | **gap (policy)**: needs BAR's approval for this repository | issue #6 |
 | Unit tests | 28/29 on Linux (testCreg: upstream `paletteIndex`, fixed on master) | 28/29, same single failure | **match** | `scripts/run-unit-tests.sh`; `scripts/check-nonmac.sh linux` |

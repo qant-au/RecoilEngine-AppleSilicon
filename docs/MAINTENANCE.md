@@ -30,13 +30,16 @@ Shipping happens on the pinned tag + macOS layer, nothing else: lockstep
 multiplayer requires byte-identical simulation to the version the live fleet
 runs.
 
-## Where this repository stands (measured 2026-11-08)
+## Where this repository stands (measured 2026-11-09)
 
-- **Base:** upstream release tag `2026.07.04`, which is what BAR's production
-  servers run. Measure, don't assume: the engine for each BAR setup is in
+- **Base:** upstream release tag `2026.09.02`, BAR's Engine Test engine.
+  Production still runs `2026.07.04`; this repository moved ahead of it on
+  2026-11-09 by decision (releases target the engine BAR is moving to), by
+  merging the tag into the layer rather than rebasing, so `main` was never
+  rewritten. Measure, don't assume: the engine for each BAR setup is in
   [BYAR-Chobby `dist_cfg/config.json`](https://github.com/beyond-all-reason/BYAR-Chobby/blob/master/dist_cfg/config.json)
   (`manual-linux` / `manual-win` = production, `*-test-engine` = the next one;
-  2026.09.02 as of 2026-10-27). Bump when production moves, not before.
+  2026.09.02 as of 2026-10-27).
 - **Against `master`:** about 120 commits ahead and 180 behind. Recoil cuts
   releases on branches, so neither 2026.07.04 nor 2026.09.02 is on `master`, and
   "behind master" is mostly unreleased work. Track releases, watch `master` for

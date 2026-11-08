@@ -92,6 +92,21 @@ bit-exact with the fleet. Linux runs used upstream's own build image under
 emulation. Streflop: `scripts/run-synctest.sh` is BIT-EXACT against the x86
 SSE reference (47,852 common tests) and the NEON reference (52,080).
 
+### 3b. Engine 2026.09.02, verified 2026-11-09 (this repository)
+
+After merging upstream 2026.09.02 into the macOS layer, a public fleet replay
+recorded on 2026.09.02 (BAR's Engine Test channel) was re-simulated on the
+macOS arm64 build. Found with `scripts/find-fleet-replays.py 2026.09.02`
+(the replay API cannot filter by engine).
+
+| Replay | Build | Result |
+|---|---|---|
+| 1v1, Glacial Gap v1.1 (13.6 min, game `test-31836-b250a16`, recorded 2026-11-08) | this repository, macOS arm64 | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (78 s at 20x) |
+
+Same gates as 3a: libm parity 9/9, streflop BIT-EXACT against the x86 SSE
+(47,852) and NEON (52,080) references. Linux and Windows builds of this tree
+were not re-run for the switch; that is a release-time check.
+
 ## 4. Live cross-platform multiplayer (the real thing)
 
 Replays prove the sim; live games additionally prove the network path, and

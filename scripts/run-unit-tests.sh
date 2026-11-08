@@ -5,8 +5,9 @@
 #
 # Builds in build-tests/, NOT build-engine/: a bare ninja in build-engine/ undoes
 # the gcc-swapped libm objects (see build-engine.sh). AI_TYPES=NONE.
-# Expected on 2026.07.04: 28/29, the one failure testCreg (upstream's
-# unregistered CSolidObject::paletteIndex, fixed on Recoil master).
+# Expected on 2026.09.02 (and 2026.07.04): 28/29, the one failure testCreg
+# (upstream's unregistered CSolidObject member, reported as missing bytes in
+# every projectile class; fixed on Recoil master).
 #
 # Usage: scripts/run-unit-tests.sh [ctest args...]     prints UNIT_TESTS_OK
 set -uo pipefail
