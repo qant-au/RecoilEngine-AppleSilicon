@@ -1318,6 +1318,29 @@ bool SpringApp::MainEventHandler(const SDL_Event& event)
 					LOG("[SpringApp::%s][SDL_WINDOWEVENT_DISPLAY_CHANGED] to display %d\n", __func__, event.window.data1);
 					// try to reinit GL context
 					globalRendering->MakeCurrentContext(false);
+
+#if defined(__APPLE__) && !defined(HEADLESS)
+					// Moving the window to a display with a different backing scale
+					// changes the drawable size without a SIZE_CHANGED event, so the
+					// view and the interface keep the old display's geometry. Rebuild
+					// them as a resize would. From Vandomas/RecoilEngine-AppleSilicon
+					// 9226256ac8 (Vandomas).
+					Watchdog::ClearTimer(WDT_MAIN, true);
+					{
+						SCOPED_ONCE_TIMER("GlobalRendering::UpdateGL");
+
+						globalRendering->UpdateGLConfigs();
+						globalRendering->UpdateGLGeometry();
+						globalRendering->InitGLState();
+						UpdateInterfaceGeometry();
+					}
+					{
+						SCOPED_ONCE_TIMER("ActiveController::ResizeEvent");
+
+						activeController->ResizeEvent();
+						mouseInput->InstallWndCallback();
+					}
+#endif
 				} break;
 
 				case SDL_WINDOWEVENT_CLOSE: {
