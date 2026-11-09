@@ -761,6 +761,7 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 		// blind: the window freezes, the watchdog fires half a minute later and the
 		// process dies with a hang report instead of a reason. Ask the driver instead
 		// and quit straight away. From Vandomas/RecoilEngine-AppleSilicon c2a67950b1.
+#ifndef HEADLESS
 		if (GLAD_GL_KHR_robustness != 0) {
 			static uint32_t resetChecks = 0;
 			if ((++resetChecks % 30u) == 0u) {
@@ -775,6 +776,7 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 				}
 			}
 		}
+#endif
 
 #if defined(__APPLE__) && !defined(HEADLESS) && defined(SPRING_MAC_DIAGNOSTICS)
 		// SPRING_FRAME_CAPTURE: headless verification capture of the default
