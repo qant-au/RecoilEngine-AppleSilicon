@@ -328,8 +328,10 @@ This port stands on a lot of prior work, gratefully:
     [RecoilEngine#3689](https://github.com/beyond-all-reason/RecoilEngine/pull/3689);
     first-vertex provoking on KosmicKrisp (#3532), `gl.BeginEnd` in one draw
     (#3533), rectangle outlines as lines (#3272), the SSD path check (#3690),
-    headless S3O decoding (#3700) and Lua errors instead of crashes on unusable
-    LuaVBOs (#3695).
+    headless S3O decoding (#3700), Lua errors instead of crashes on unusable
+    LuaVBOs (#3695), `--window` turning fullscreen off again (#3163), and from
+    his macOS integration branch (#3271) the GL 3.0 extension-check skip and
+    the Mesa threaded-context patch for flipped frames (Mesa issue 16734).
   - **[Leon Seemann](https://github.com/leonseemann)**: macOS keyboard fixes
     (#3540: Cmd as Ctrl, dead keys, AutoFill off, F11/Pause), streamed-buffer
     orphaning (#3542), persistent model uniforms (#3543), LOS/radar PBO uploads
@@ -340,7 +342,8 @@ This port stands on a lot of prior work, gratefully:
   - **[Yeo-Jun Yoon](https://github.com/yeojuny)**: the QTPFS failed-load fix (#3694),
     LuaVBO size and padding checks (#3551, #3553), StreamBuffer slot stepping and
     fence lifetime (#3552, #3556), the framebuffer restore after
-    gl.RenderToTexture (#3554) and archive fallback fonts (#3555).
+    gl.RenderToTexture (#3554), archive fallback fonts (#3555) and the DXT5/BC4/BC5
+    alpha flip that wrote past the block (from #3271).
   - **[sprunk](https://github.com/sprunk)**: review changes and the changelog
     snippet on #3551.
   - **[moss-orbit-9f339e](https://github.com/moss-orbit-9f339e)**: headless GLSL/NPOT
