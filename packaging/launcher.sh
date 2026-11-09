@@ -559,13 +559,27 @@ if [ -x "$HERE/sl-bridge" ]; then
   # give it a moment to write sl-connection.json before the lobby looks for it
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$WRITEDIR/sl-connection.json" ] && break; sleep 0.1; done
 fi
-# execfail: a failed exec (kernel refused the binary: bad arch, quarantine,
-# corrupt file) returns control here instead of silently killing the shell.
-shopt -s execfail 2>/dev/null || true
 # BAR_INFOLOG lets the engine's error dialog (Platform::MsgBox) attach the
 # full this-session log to any fatal it shows.
-SPRING_DATADIR="$RES" BAR_INFOLOG="$WRITEDIR/infolog.txt" \
-BAR_PORT_VERSION="$PORT_VERSION" \
-  exec "$HERE/spring" --write-dir "$WRITEDIR" --menu "$LOBBY_RAPID" "$@"
-fail_dialog "The game engine could not be started (macOS refused to run it). Please re-download the game; if this keeps happening, report it with the log at: $WRITEDIR/first-run-download.log"
-exit 1
+# The engine runs as a child, not via exec, so the lobby can come back after an
+# engine error exit (a failed savegame load quits the whole engine, menu and
+# all). From Vandomas/RecoilEngine-AppleSilicon 64d245eca0.
+export SPRING_DATADIR="$RES" BAR_INFOLOG="$WRITEDIR/infolog.txt" BAR_PORT_VERSION="$PORT_VERSION"
+while :; do
+  T0=$SECONDS
+  "$HERE/spring" --write-dir "$WRITEDIR" --menu "$LOBBY_RAPID" "$@"
+  RC=$?
+  case "$RC" in
+    # macOS refused to run the binary (bad arch, quarantine, corrupt file)
+    126|127)
+      fail_dialog "The game engine could not be started (macOS refused to run it). Please re-download the game; if this keeps happening, report it with the log at: $WRITEDIR/first-run-download.log"
+      exit 1;;
+    # engine error exits, mod 256: CRASHED -1003 -> 21, NOLOAD 1002 -> 234,
+    # BADSAVE 1004 -> 236 (rts/System/SpringExitCode.h): bring the lobby back
+    21|234|236) ;;
+    *) exit "$RC";;
+  esac
+  # only for sessions that got past startup: a lobby that cannot boot must not
+  # loop on its own error dialog
+  [ $((SECONDS - T0)) -ge 20 ] || exit "$RC"
+done
