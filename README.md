@@ -320,21 +320,29 @@ This port stands on a lot of prior work, gratefully:
     rebuilding the picture when the window changes display, Retina mouse
     positions in the engine's own start menu, the hardware cursor default with a
     speed scale, non-blocking UDP sends (RecoilEngine#3293), GPU-loss handling,
-    GL debug markers, log roll-up fixes and bringing the lobby back after an
-    engine error, from his fork.
+    GL debug markers, log roll-up fixes, bringing the lobby back after an
+    engine error, GPU time per render pass in the profiler, and the savegame
+    fixes (decal drawer recreated from the save, objects cleaned up after a
+    failed load), from his fork.
   - **[tomjn](https://github.com/tomjn)**: the NEON FPCR check, from
     [RecoilEngine#3689](https://github.com/beyond-all-reason/RecoilEngine/pull/3689);
     first-vertex provoking on KosmicKrisp (#3532), `gl.BeginEnd` in one draw
-    (#3533), rectangle outlines as lines (#3272), the SSD path check (#3690) and
-    headless S3O decoding (#3700).
+    (#3533), rectangle outlines as lines (#3272), the SSD path check (#3690),
+    headless S3O decoding (#3700) and Lua errors instead of crashes on unusable
+    LuaVBOs (#3695).
   - **[Leon Seemann](https://github.com/leonseemann)**: macOS keyboard fixes
     (#3540: Cmd as Ctrl, dead keys, AutoFill off, F11/Pause), streamed-buffer
     orphaning (#3542), persistent model uniforms (#3543), LOS/radar PBO uploads
     (#3494), S3TC DDS decompression (#3566) and the nano-particle geometry-shader
-    check (#3539).
+    check (#3539), and the hardware MAC address through IOKit (#3493).
   - **[ysommer](https://github.com/ysommer)**: macOS crash stack traces and clean
     exit (#3546), hidden symbol visibility (#3545).
-  - **[Yeo-Jun Yoon](https://github.com/yeojuny)**: the QTPFS failed-load fix (#3694).
+  - **[Yeo-Jun Yoon](https://github.com/yeojuny)**: the QTPFS failed-load fix (#3694),
+    LuaVBO size and padding checks (#3551, #3553), StreamBuffer slot stepping and
+    fence lifetime (#3552, #3556), the framebuffer restore after
+    gl.RenderToTexture (#3554) and archive fallback fonts (#3555).
+  - **[sprunk](https://github.com/sprunk)**: review changes and the changelog
+    snippet on #3551.
   - **[moss-orbit-9f339e](https://github.com/moss-orbit-9f339e)**: headless GLSL/NPOT
     reporting (#3615) and the screenshot deadlock fix (#3631).
   - **[TonyTheCat](https://github.com/TonyTheCat)**: the mouse-cursor texture leak
