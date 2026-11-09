@@ -244,6 +244,20 @@ bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 #endif
 			}
 
+#if defined(__APPLE__) && SDL_VERSION_ATLEAST(2, 0, 18)
+			// Shift + swipe on a Magic Mouse or trackpad (precise/pixel deltas)
+			// pans the map. A notched wheel (precise == line) keeps Shift = fast zoom.
+			if (mouse != nullptr && (SDL_GetModState() & KMOD_SHIFT) != 0) {
+				const bool precise = (event.wheel.preciseX != (float)event.wheel.x) ||
+				                     (event.wheel.preciseY != (float)event.wheel.y);
+				if (precise) {
+					// report the physical finger direction whatever the natural-scroll setting
+					const float sign = (event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) ? -1.0f : 1.0f;
+					if (mouse->SwipePan(event.wheel.preciseX * sign, event.wheel.preciseY * sign))
+						break;
+				}
+			}
+#endif
 			if (mouse != nullptr)
 				mouse->MouseWheel(event.wheel.y);
 

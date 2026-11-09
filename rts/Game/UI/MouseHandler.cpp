@@ -70,6 +70,7 @@ CONFIG(int, MouseDragSelectionThreshold).defaultValue(4).description("Distance i
 CONFIG(int, MouseDragCircleCommandThreshold).defaultValue(4).description("Distance in pixels which the mouse must be dragged to trigger a circular area command.");
 CONFIG(int, MouseDragBoxCommandThreshold).defaultValue(16).description("Distance in pixels which the mouse must be dragged to trigger a rectangular area command.");
 CONFIG(int, MouseDragFrontCommandThreshold).defaultValue(30).description("Distance in pixels which the mouse must be dragged to trigger a formation front command.");
+CONFIG(float, MacSwipePanSpeed).defaultValue(1.0f).minimumValue(0.0f).description("macOS only: map pan speed for Shift + swipe on a Magic Mouse or trackpad. 0 turns the pan off, and Shift + swipe zooms fast as on other platforms.");
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -662,6 +663,27 @@ void CMouseHandler::MouseWheel(float delta)
 
 	camHandler->GetCurrentController().MouseWheelMove(delta * scrollWheelSpeed);
 }
+
+
+#if defined(__APPLE__)
+bool CMouseHandler::SwipePan(float dx, float dy)
+{
+	// Shift + swipe on a Magic Mouse or trackpad pans the map (macOS only).
+	// dx/dy are the swipe's pixel deltas with the finger direction already
+	// normalised by the caller; the map follows the finger, so the camera
+	// moves the opposite way. Notched wheels never reach here.
+	const float speed = configHandler->GetFloat("MacSwipePanSpeed");
+	if (speed <= 0.0f || game == nullptr)
+		return false;
+
+	// KeyMove scales xy by sqrt(z) * 200 * pixelSize * 2 * scrollSpeed;
+	// z = 1 and a 1/400 factor make one swipe pixel move about one screen pixel.
+	constexpr float PX = 1.0f / 400.0f;
+	unitTracker.Disable();
+	camHandler->GetCurrentController().KeyMove(float3(-dx * PX * speed, dy * PX * speed, 1.0f));
+	return true;
+}
+#endif
 
 
 void CMouseHandler::DrawSelectionBox() const
