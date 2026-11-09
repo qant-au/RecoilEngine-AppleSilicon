@@ -587,7 +587,16 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
         let eng = (cmd["Engine"] as? String) ?? ""
         guard let demo = (cmd["StartDemoName"] as? String).flatMap(insideWriteDir) else { return }
         if !engineVersion.isEmpty && eng.lowercased().hasPrefix(engineVersion.lowercased()) == false {
-            log("StartNewSpring refused: demo engine \(eng) != bundled \(engineVersion)"); return
+            log("StartNewSpring refused: demo engine \(eng) != bundled \(engineVersion)")
+            // say why, instead of the replay silently doing nothing (Vandomas issue #21)
+            let msg = "This replay was recorded on engine \(eng.isEmpty ? "(unknown)" : eng). Accurona can only play replays recorded on engine \(engineVersion)."
+            // passed as an argv item, not spliced into the script: no quoting issues
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            p.arguments = ["-e", "on run argv",
+                           "-e", "display dialog (item 1 of argv) buttons {\"OK\"} default button 1 with title \"Accurona\" with icon note",
+                           "-e", "end run", msg]
+            try? p.run()
+            return
         }
         let p = Process(); p.executableURL = URL(fileURLWithPath: enginePath)
         p.arguments = ["--write-dir", writeDir.path, demo.path]
