@@ -7,7 +7,7 @@
 set -uo pipefail
 BAR="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/sl-bridge-test.XXXXXX")
-trap 'kill $BPID $HOLDER 2>/dev/null; rm -rf "$WORK"' EXIT
+trap 'kill $BPID $HOLDER ${DISCORD:-} 2>/dev/null; rm -rf "$WORK" "${DTMP:-}"' EXIT
 PASS=0; FAIL=0
 ok(){ echo "  ok   $*"; PASS=$((PASS+1)); }; no(){ echo "  FAIL $*"; FAIL=$((FAIL+1)); }
 
@@ -16,9 +16,46 @@ WD="$WORK/wd"; mkdir -p "$WD/demos"
 DEMO="${SL_BRIDGE_TEST_DEMO:-$BAR/deps/oth014/duel.sdfz}"
 HAVE_DEMO=0; [ -f "$DEMO" ] && { cp "$DEMO" "$WD/demos/test.sdfz"; HAVE_DEMO=1; }
 
+# Fixture map: a .sdz holding maps/fixture.smf whose minimap is one solid DXT1
+# colour (pure red, 0xF800), so the decoded picture can be checked exactly.
+mkdir -p "$WD/maps" "$WORK/mapsrc/maps"
+python3 -c "
+import struct,sys
+hdr=bytearray(80); hdr[0:16]=b'spring map file\\0'
+struct.pack_into('<i',hdr,64,80)            # minimapPtr
+blk=struct.pack('<HHI',0xF800,0xF800,0)     # every pixel = colour 0
+open(sys.argv[1],'wb').write(bytes(hdr)+blk*(256*256)+b'tail')
+" "$WORK/mapsrc/maps/fixture.smf"
+(cd "$WORK/mapsrc" && /usr/bin/zip -q -r "$WD/maps/fixture.sdz" maps)
+# Fake Discord: answers the handshake with READY, records the SET_ACTIVITY frame.
+# Unix socket paths are short (104 bytes), so this TMPDIR is short too.
+DTMP=$(mktemp -d /tmp/slb.XXXXXX)
+cat > "$WORK/discord.py" <<'PY'
+import json, os, socket, struct, sys
+path, out = sys.argv[1], sys.argv[2]
+s = socket.socket(socket.AF_UNIX); s.bind(path); s.listen(1)
+c, _ = s.accept()
+def rd():
+    h = c.recv(8)
+    if len(h) < 8: return None
+    op, n = struct.unpack('<II', h); b = b''
+    while len(b) < n: b += c.recv(n - len(b))
+    return op, json.loads(b)
+def wr(op, o):
+    b = json.dumps(o).encode(); c.sendall(struct.pack('<II', op, len(b)) + b)
+op, hs = rd(); json.dump({'handshake': hs}, open(out + '.hs', 'w'))
+wr(1, {'cmd': 'DISPATCH', 'evt': 'READY', 'data': {}})
+op, cmd = rd(); json.dump(cmd, open(out, 'w'))
+wr(1, {'cmd': 'SET_ACTIVITY', 'evt': None, 'nonce': cmd.get('nonce'), 'data': {}})
+c.recv(1)
+PY
+python3 "$WORK/discord.py" "$DTMP/discord-ipc-0" "$WORK/discord.json" & DISCORD=$!
+printf '%s' '{"log_upload_url":"https://log.example.invalid","discord_rich_presence":{"application_id":"123","minimap_url":"https://maps.example/<map>.jpg","large_image_text_default":"BAR","small_image_key_default":"logo","small_image_text_default":"BAR","button_label":"Play","button_url":"https://www.beyondallreason.info/"}}' > "$WORK/extras.json"
+
 sleep 300 & HOLDER=$!     # stands in for the launcher/engine pid
-"$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine /usr/bin/false \
-  --engine-version 2026.07.04 --parent-pid "$HOLDER" --log "$WORK/bridge.log" > "$WORK/out" &
+TMPDIR="$DTMP/" "$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine /usr/bin/false \
+  --engine-version 2026.07.04 --config "$WORK/extras.json" --online 0 \
+  --parent-pid "$HOLDER" --log "$WORK/bridge.log" > "$WORK/out" &
 BPID=$!
 for _ in $(seq 50); do grep -q SL_BRIDGE_READY "$WORK/out" 2>/dev/null && break; sleep 0.1; done
 grep -q SL_BRIDGE_READY "$WORK/out" && ok "bridge ready" || { no "bridge never became ready"; cat "$WORK/bridge.log"; exit 1; }
@@ -86,6 +123,33 @@ echo "$R" | grep -q '"isSuccess":false' && ok "engine download reported unsuppor
 
 R=$(send '{"name":"Download","command":{"name":"Some Map","type":"map"}}')
 echo "$R" | grep -q '"DownloadFinished"' && echo "$R" | grep -q '"isSuccess":false' && ok "map download runs pr-downloader and reports its exit" || no "map dl: $R"
+
+R=$(send "{\"name\":\"ParseMiniMap\",\"command\":{\"mapPath\":\"$WD/maps/fixture.sdz\",\"destination\":\"LuaMenu/Images/Minimaps/fixture.jpg\",\"miniMapSize\":4}}")
+echo "$R" | grep -q '"ParseMiniMapFinished"' && ok "ParseMiniMap answers ParseMiniMapFinished" || no "ParseMiniMap: $R"
+python3 -c "
+from PIL import Image; import sys
+im=Image.open(sys.argv[1]).convert('RGB'); assert im.size==(1024,1024), im.size
+r,g,b=im.getpixel((512,512)); assert r>240 and g<20 and b<20, (r,g,b)
+" "$WD/LuaMenu/Images/Minimaps/fixture.jpg" 2>/dev/null && ok "minimap decoded: 1024x1024, the map's own colour" || no "minimap image wrong or missing"
+R=$(send '{"name":"ParseMiniMap","command":{"mapPath":"/etc/hosts","destination":"x.jpg"}}')
+echo "$R" | grep -q '"ParseMiniMapFinished"' && [ ! -f "$WD/x.jpg" ] && ok "ParseMiniMap on a non-map: finished, no image" || no "ParseMiniMap non-map: $R"
+R=$(send '{"name":"ParseMiniMap","command":{"mapPath":"x.sdz","destination":"../../escape.jpg"}}')
+[ -z "$R" ] && ok "ParseMiniMap destination outside write dir refused" || no "ParseMiniMap traversal: $R"
+
+R=$(send '{"name":"UploadLog","command":{}}')
+echo "$R" | grep -q '"UploadLogFailed"' && echo "$R" | grep -q 'switched off' && ok "UploadLog refused while online play is off" || no "UploadLog: $R"
+
+send '{"name":"DiscordSetActivity","command":{"state":"In lobby","mapName":"Glacial Gap","playerCount":2,"maxPlayerCount":16,"partyId":42}}' > /dev/null
+python3 -c "
+import json,sys
+hs=json.load(open(sys.argv[1]+'.hs'))['handshake']; assert hs=={'v':1,'client_id':'123'}, hs
+c=json.load(open(sys.argv[1])); assert c['cmd']=='SET_ACTIVITY', c
+a=c['args']['activity']
+assert a['state']=='In lobby' and a['details']=='Glacial Gap', a
+assert a['assets']['large_image']=='https://maps.example/Glacial%20Gap.jpg', a['assets']
+assert a['party']=={'id':'42','size':[2,16]}, a['party']
+assert a['buttons'][0]['url']=='https://www.beyondallreason.info/', a['buttons']
+" "$WORK/discord.json" 2>/dev/null && ok "Discord: handshake with the app id, SET_ACTIVITY with the lobby's fields" || no "Discord activity wrong or missing ($(cat "$WORK/discord.json" 2>/dev/null | head -c 300))"
 
 kill "$HOLDER"; wait "$HOLDER" 2>/dev/null
 for _ in $(seq 40); do kill -0 "$BPID" 2>/dev/null || break; sleep 0.25; done

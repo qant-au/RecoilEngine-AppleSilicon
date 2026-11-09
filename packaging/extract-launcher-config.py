@@ -7,6 +7,8 @@ Produces, into the output dir:
   chobby_config.json            <- config['json_files']['chobby_config.json']
   default_springsettings.cfg    <- config['default_springsettings'] as Key=Value
                                    (minus keys the Mac launcher owns: display)
+  launcher_extras.json          <- config['log_upload_url'] + ['discord_rich_presence']
+                                   (for sl-bridge)
   content_tags                  <- config['setups'][0]['downloads']['games'],
                                    one rapid tag per line — the packages the
                                    official launcher installs/updates
@@ -46,6 +48,11 @@ def main():
             if isinstance(v, bool):
                 v = 1 if v else 0
             f.write(f"{k} = {v}\n")
+
+    # sl-bridge (UploadLog, DiscordSetActivity) reads these two top-level keys
+    extras = {k: cfg[k] for k in ("log_upload_url", "discord_rich_presence") if k in cfg}
+    with open(os.path.join(out_dir, "launcher_extras.json"), "w") as f:
+        json.dump(extras, f, indent=2)
 
     tags = []
     for setup in cfg.get("setups", []):

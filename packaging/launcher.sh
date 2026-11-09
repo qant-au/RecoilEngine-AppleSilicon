@@ -545,6 +545,7 @@ if [ -x "$HERE/sl-bridge" ]; then
   ENGINE_VERSION="$(/usr/libexec/PlistBuddy -c "Print :EngineVersion" "$CONTENTS/Info.plist" 2>/dev/null || true)"
   "$HERE/sl-bridge" --writedir "$WRITEDIR" --prd "$HERE/pr-downloader" \
     --engine "$HERE/spring" --engine-version "$ENGINE_VERSION" \
+    --config "$RES/launcher_extras.json" --online "$( [ -f "$RES/.online-play-disabled" ] && echo 0 || echo 1 )" \
     --parent-pid "$$" --log "$WRITEDIR/sl-bridge.log" >/dev/null 2>&1 &
   # give it a moment to write sl-connection.json before the lobby looks for it
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$WRITEDIR/sl-connection.json" ] && break; sleep 0.1; done
