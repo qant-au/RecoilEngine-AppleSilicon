@@ -78,6 +78,7 @@ WindowBorderless = 0
 VSync = 0
 EdgeMoveWidth = 0
 WindowedEdgeMove = 0
+Sound = 0
 CFG
 # extra engine settings for one run, e.g. VISREG_EXTRA_SETTINGS='GPUTimers = 1'
 # (newline-separated); the pictures are still compared against the baselines
