@@ -212,6 +212,8 @@ echo "=== [1c/7] visreg (visual/artifact/perf regression)"
 if [ "$RUN_VISREG" = "1" ]; then
   VR_ARGS=()
   [ "$RUN_VISREG_PERF" = "1" ] && VR_ARGS+=(--perf)
+  # visreg plays the LAST BUILT app bundle (release-artifacts/BAR Launcher.app):
+  # the bare build-engine binary cannot load the bundled Vulkan loader
   VISREG_BUILD="$BUILD" VISREG_MESA="$MESA_PREFIX" \
     "$BAR/scripts/visreg.sh" ${VR_ARGS[@]+"${VR_ARGS[@]}"} \
     || { echo "FATAL: visreg regression gate failed"; exit 1; }
