@@ -202,7 +202,9 @@ bool Renderer::InitShader()
 	builtForceNoGeometryShader = cfg.forceNoGeometryShader;
 	std::string geometryLog;
 
-	if (!cfg.forceNoGeometryShader) {
+	// a driver can link and validate a geometry shader yet never run it (KosmicKrisp);
+	// then only the non-GS path draws anything. From RecoilEngine#3539 (Leon Seemann).
+	if (!cfg.forceNoGeometryShader && globalRendering->supportGeometryShaderStage) {
 		shader = shaderHandler->CreateProgramObject(SHADER_POOL, SHADER_NAME_GEOM);
 		shader->AttachShaderObject(shaderHandler->CreateShaderObject("GLSL/NanoParticleVertProg.glsl", "", GL_VERTEX_SHADER));
 		shader->AttachShaderObject(shaderHandler->CreateShaderObject("GLSL/NanoParticleGeomProg.glsl", "", GL_GEOMETRY_SHADER));
