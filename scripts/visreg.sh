@@ -78,6 +78,9 @@ VSync = 0
 EdgeMoveWidth = 0
 WindowedEdgeMove = 0
 CFG
+# extra engine settings for one run, e.g. VISREG_EXTRA_SETTINGS='GPUTimers = 1'
+# (newline-separated); the pictures are still compared against the baselines
+[ -n "${VISREG_EXTRA_SETTINGS:-}" ] && printf '%s\n' "$VISREG_EXTRA_SETTINGS" >> "$WD/springsettings.cfg"
 
 echo "visreg: $NAME on $ENGINE_VER (window opens for about two minutes)"
 SPRING_MAC_PERF_PIN=1 SPRING_MAC_FIXED_WINDOW=1 SPRING_DEMO_SPEED=20 \
