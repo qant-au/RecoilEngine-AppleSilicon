@@ -12,6 +12,7 @@
 #include "Backend.h"
 #include "DefaultFilter.h"
 #include "LogUtil.h"
+#include "Level.h"
 #include "System/MainDefines.h"
 
 #define MAX_LOG_SINKS 8
