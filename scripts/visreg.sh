@@ -18,8 +18,9 @@
 # 1x scale, fixed size), so a rerun gives the same pictures on any monitor.
 # Unsynced animation (water, sky) still moves a little between runs, hence a
 # tolerance rather than an exact match: a shot fails when its mean per-channel
-# difference exceeds VISREG_MAX_MEAN (default 2.0 of 255; two runs measured 0.71 at most) or more than
-# VISREG_MAX_BAD_PCT percent (default 1.0; measured 0.20) differ by over 40.
+# difference exceeds VISREG_MAX_MEAN (default 2.0 of 255) or more than
+# VISREG_MAX_BAD_PCT percent (default 1.0) differ by over 40. A limits.txt beside
+# the baselines overrides both per picture (06 is looser: nano spray, water).
 set -uo pipefail
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 # The engine comes from a BUILT APP BUNDLE (default: the last 'make app'),

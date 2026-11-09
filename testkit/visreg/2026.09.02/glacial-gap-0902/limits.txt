@@ -1,0 +1,5 @@
+# Per-picture limits (scripts/visreg/compare.py). Picture 06 is the busiest
+# frame: nano build spray (random per run, drawn since acu-036) and water
+# animation made two runs of the same build differ by mean 2.2-3.2 and
+# 1.0-1.6% bad pixels, so it gets a looser limit. Adam 2026-11-09.
+06-end-east.png 4.5 2.5

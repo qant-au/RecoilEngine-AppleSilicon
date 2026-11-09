@@ -1,6 +1,8 @@
 """Compare visreg pictures with their baselines (scripts/visreg.sh).
 
 Usage: compare.py <baseline-dir> <run-dir> [--max-mean M] [--max-bad-pct P]
+An optional limits.txt in the baseline dir overrides the limits per picture,
+one line each: <name.png> <max-mean> <max-bad-pct> (# starts a comment).
 Writes <name>-diff.png beside each failing picture and prints VISREG_OK or
 VISREG_FAIL with one line per picture.
 """
@@ -20,6 +22,13 @@ a = ap.parse_args()
 
 base, run = Path(a.base), Path(a.run)
 fails = 0
+limits = {}
+lf = base / "limits.txt"
+if lf.exists():
+    for line in lf.read_text().splitlines():
+        f = line.split("#", 1)[0].split()
+        if len(f) == 3:
+            limits[f[0]] = (float(f[1]), float(f[2]))
 names = sorted(p.name for p in base.glob("*.png") if not p.name.endswith("-diff.png"))
 if not names:
     print(f"VISREG_FAIL no baselines in {base}")
@@ -42,7 +51,8 @@ for name in names:
     mean = sum(i * c for ch in range(3) for i, c in enumerate(hist[ch * 256:(ch + 1) * 256])) / (px * 3)
     worst = diff.convert("L").point(lambda v: 255 if v > a.bad_level else 0)
     bad_pct = 100.0 * worst.histogram()[255] / px
-    ok = mean <= a.max_mean and bad_pct <= a.max_bad_pct
+    max_mean, max_bad = limits.get(name, (a.max_mean, a.max_bad_pct))
+    ok = mean <= max_mean and bad_pct <= max_bad
     print(f"  {name}: mean {mean:.2f}  bad {bad_pct:.2f}%  {'ok' if ok else 'FAIL'}")
     if not ok:
         fails += 1
