@@ -5,6 +5,8 @@
 # artifact-pattern matches the basename inside the .app bundle.
 spring	Recoil engine (this fork)	GPL-2.0-or-later	Full corresponding source published (fork repo); COPYING shipped; source-availability notice in app
 spring-headless	Recoil engine (this fork)	GPL-2.0-or-later	Same as spring
+spring-dedicated	Recoil engine dedicated server (this fork)	GPL-2.0-or-later	Same as spring
+libunitsync.dylib	Recoil unitsync library (this fork)	GPL-2.0-or-later	Same as spring
 pr-downloader*	pr-downloader (engine tree)	GPL-2.0-or-later	Same as spring
 libEGL*.dylib	Mesa (Zink)	MIT	License text shipped
 libgallium*.dylib	Mesa (Zink + gallium)	MIT	License text shipped
@@ -64,4 +66,4 @@ consent-dialog	BAR macOS port (first-run consent UI)	GPL-2.0-or-later	Part of th
 message-check	BAR macOS port (remote message/kill-switch UI)	GPL-2.0-or-later	Part of this project; source in packaging/
 sl-bridge	BAR macOS port (spring-launcher protocol bridge for the lobby)	GPL-2.0-or-later	Part of this project; source in packaging/
 libAIInterface.dylib	C AI Interface (engine tree)	GPL-2.0-or-later	Same as spring
-libSkirmishAI.dylib	Skirmish AIs: BARb (CircuitAI fork, GPL-2.0) + NullAI (engine tree); BARb statically vendors AngelScript (Zlib)	GPL-2.0	Source: engine fork repo + BARb submodule branch macos-arm64; AngelScript attribution via Zlib.txt
+libSkirmishAI.dylib	Skirmish AIs: BARb (CircuitAI fork, GPL-2.0), CircuitAI (rlcevg/CircuitAI, GPL-2.0, built with patches/circuitai) + NullAI (engine tree); BARb and CircuitAI statically vendor AngelScript (Zlib)	GPL-2.0	Source: engine fork repo + BARb submodule branch macos-arm64 + CircuitAI submodule; AngelScript attribution via Zlib.txt

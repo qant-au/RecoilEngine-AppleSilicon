@@ -11,6 +11,7 @@
 	branch = macos-arm64-2026.09.02
 [submodule "AI/Skirmish/CircuitAI"]
 	path = AI/Skirmish/CircuitAI
+	ignore = dirty
 	url = https://github.com/rlcevg/CircuitAI.git
 	branch = zk
 [submodule "rts/lib/tracy"]

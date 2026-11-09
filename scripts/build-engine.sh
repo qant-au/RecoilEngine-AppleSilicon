@@ -126,6 +126,19 @@ if [ -d "$SRC/.git" ] || [ -f "$SRC/.git" ]; then
   fi
 fi
 
+# CircuitAI (rlcevg/CircuitAI, upstream submodule) needs the same AppleClang/arm64
+# build fix BARb carries (AngelScript's arm64 assembly). It is applied here from
+# patches/circuitai rather than forked, so the submodule stays on upstream's
+# commit; .gitmodules sets ignore=dirty for it. Idempotent.
+for pf in "$BAR"/patches/circuitai/*.patch; do
+  [ -f "$pf" ] || continue
+  if git -C "$SRC/AI/Skirmish/CircuitAI" apply --check "$pf" 2>/dev/null; then
+    git -C "$SRC/AI/Skirmish/CircuitAI" apply "$pf"
+  elif ! git -C "$SRC/AI/Skirmish/CircuitAI" apply --reverse --check "$pf" 2>/dev/null; then
+    echo "FATAL: $pf neither applies nor is already applied to AI/Skirmish/CircuitAI"; exit 1
+  fi
+done
+
 cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"} \
   -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
@@ -137,7 +150,7 @@ cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   -DCMAKE_CXX_FLAGS="$PREFIX_MAP" \
   -DCMAKE_OBJC_FLAGS="$PREFIX_MAP" \
   -DCMAKE_OBJCXX_FLAGS="$PREFIX_MAP" \
-  -DAI_TYPES="${AI_TYPES:-NATIVE}" -DAI_EXCLUDE_REGEX="CircuitAI|CppTestAI" \
+  -DAI_TYPES="${AI_TYPES:-NATIVE}" -DAI_EXCLUDE_REGEX="CppTestAI" \
   -DUSERDOCS_PLAIN=ON \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -146,12 +159,11 @@ cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   -DSPRING_MAC_LIBEGL="$MESA_LIBEGL" \
   -DOPENAL_SOFT_PREFIX="$SHARED_PREFIX"
 
-NINJA_TARGETS=(spring spring-headless pr-downloader_cli basecontent)
+NINJA_TARGETS=(spring spring-headless spring-dedicated unitsync pr-downloader_cli basecontent)
 if [ "${AI_TYPES:-NATIVE}" != "NONE" ]; then
-  # BARb (CircuitAI-based) + NullAI + the C interface; the CircuitAI sibling
-  # submodule needs the same arm64 fixes and BAR only uses BARb, so it stays
-  # excluded (AI_EXCLUDE_REGEX above).
-  NINJA_TARGETS+=("AI/Interfaces/C/all" "AI/Skirmish/BARb/all" "AI/Skirmish/NullAI/all")
+  # BARb (CircuitAI-based) + CircuitAI + NullAI + the C interface. BAR uses only
+  # BARb; CircuitAI ships in the engine-only distribution like the official 7z.
+  NINJA_TARGETS+=("AI/Interfaces/C/all" "AI/Skirmish/BARb/all" "AI/Skirmish/CircuitAI/all" "AI/Skirmish/NullAI/all")
 fi
 ninja -C "$BUILD" -j"$(sysctl -n hw.ncpu)" "${NINJA_TARGETS[@]}"
 
@@ -159,12 +171,14 @@ if [ "${AI_TYPES:-NATIVE}" != "NONE" ]; then
   # Assemble the runtime AI tree the engine scans (AI/<kind>/<name>/<version>/
   # with the info .lua files beside the dylib). Build outputs land in
   # .../<name>/data/ which the engine ignores (no AIInfo.lua there).
-  rm -rf "$BUILD/AI/Interfaces/C/0.1" "$BUILD/AI/Skirmish/BARb/stable" "$BUILD/AI/Skirmish/NullAI/0.1"
-  mkdir -p "$BUILD/AI/Interfaces/C/0.1" "$BUILD/AI/Skirmish/BARb/stable" "$BUILD/AI/Skirmish/NullAI/0.1"
+  rm -rf "$BUILD/AI/Interfaces/C/0.1" "$BUILD/AI/Skirmish/BARb/stable" "$BUILD/AI/Skirmish/CircuitAI/stable" "$BUILD/AI/Skirmish/NullAI/0.1"
+  mkdir -p "$BUILD/AI/Interfaces/C/0.1" "$BUILD/AI/Skirmish/BARb/stable" "$BUILD/AI/Skirmish/CircuitAI/stable" "$BUILD/AI/Skirmish/NullAI/0.1"
   cp -R "$SRC/AI/Interfaces/C/data/." "$BUILD/AI/Interfaces/C/0.1/"
   cp "$BUILD/AI/Interfaces/C/data/libAIInterface.dylib" "$BUILD/AI/Interfaces/C/0.1/"
   cp -R "$SRC/AI/Skirmish/BARb/data/." "$BUILD/AI/Skirmish/BARb/stable/"
   cp "$BUILD/AI/Skirmish/BARb/data/libSkirmishAI.dylib" "$BUILD/AI/Skirmish/BARb/stable/"
+  cp -R "$SRC/AI/Skirmish/CircuitAI/data/." "$BUILD/AI/Skirmish/CircuitAI/stable/"
+  cp "$BUILD/AI/Skirmish/CircuitAI/data/libSkirmishAI.dylib" "$BUILD/AI/Skirmish/CircuitAI/stable/"
   cp -R "$SRC/AI/Skirmish/NullAI/data/." "$BUILD/AI/Skirmish/NullAI/0.1/"
   cp "$BUILD/AI/Skirmish/NullAI/data/libSkirmishAI.dylib" "$BUILD/AI/Skirmish/NullAI/0.1/"
 fi

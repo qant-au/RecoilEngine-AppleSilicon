@@ -74,7 +74,9 @@ PORTVER="$(cat "$PKG/PORT_VERSION" 2>/dev/null | tr -d '[:space:]')"
 #            every-launch content download from BAR's official network, BAR
 #            branding. What players install to play Beyond All Reason.
 #   engine — the Recoil engine port alone: signed, notarized engine binaries
-#            (spring, spring-headless, pr-downloader) with the bundled driver
+#            (spring, spring-headless, spring-dedicated, libunitsync,
+#            pr-downloader, the AIs and the default UI files, the same set as
+#            the official Linux engine archive) with the bundled driver
 #            and dylib closure, no game configuration or branding. For any
 #            Spring/Recoil game community, or for building other helpers on.
 PROFILE=bar
@@ -260,6 +262,10 @@ if [ "$PROFILE" = "engine" ]; then
   # engine consumers (game communities, dedicated hosts, replay tooling) get
   # the headless build too; the BAR helper app has no use for it
   cp "$BUILD/spring-headless" "$MACOS/spring-headless"
+  # the rest of the official recoil_<ver>_<arch>-linux.7z set: the dedicated
+  # server and unitsync (lobbies load it from beside the engine binaries)
+  cp "$BUILD/spring-dedicated" "$MACOS/spring-dedicated"
+  cp "$BUILD/libunitsync.dylib" "$MACOS/libunitsync.dylib"
 fi
 if [ "$PROFILE" = "bar" ]; then
   # ---- BAR helper: launcher, content download/update, native helpers ----
@@ -281,7 +287,12 @@ if [ "$PROFILE" = "bar" ]; then
 fi
 # base content archives (engine-built sdz)
 mkdir -p "$RESOURCES/base"
-find "$BUILD" -name "*.sdz" -exec cp {} "$RESOURCES/base/" \;
+# keep the official layout (base/spring/bitmaps.sdz): unitsync's Init requires
+# that exact path, and flattening it made unitsync fail to initialise
+(cd "$BUILD/base" && find . -name "*.sdz" | while IFS= read -r f; do
+  mkdir -p "$RESOURCES/base/$(dirname "$f")"; cp "$f" "$RESOURCES/base/$f"
+done)
+test -f "$RESOURCES/base/spring/bitmaps.sdz" || { echo "FATAL: base/spring/bitmaps.sdz not staged"; exit 1; }
 # native skirmish AIs (issue #1): runtime AI/ tree assembled by
 # build-engine.sh (C interface + BARb + NullAI). Lives in Resources = the
 # engine's read-only datadir, so FetchSkirmishAILibrary finds it.
@@ -293,7 +304,7 @@ cp -R "$BUILD/AI" "$RESOURCES/AI"
 # leak, e.g. cmake_install.cmake's "Install script for directory: <path>").
 find "$RESOURCES/AI" -name CMakeFiles -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$RESOURCES/AI" -type f \( -name '*.cmake' -o -name 'Makefile' -o -name 'CMakeCache.txt' -o -name '*.o' \) -delete 2>/dev/null || true
-for ai in "AI/Interfaces/C/0.1/libAIInterface.dylib" "AI/Skirmish/BARb/stable/libSkirmishAI.dylib" "AI/Skirmish/NullAI/0.1/libSkirmishAI.dylib"; do
+for ai in "AI/Interfaces/C/0.1/libAIInterface.dylib" "AI/Skirmish/BARb/stable/libSkirmishAI.dylib" "AI/Skirmish/CircuitAI/stable/libSkirmishAI.dylib" "AI/Skirmish/NullAI/0.1/libSkirmishAI.dylib"; do
   test -f "$RESOURCES/$ai" || { echo "FATAL: $ai missing from staged AI tree"; exit 1; }
   file "$RESOURCES/$ai" | grep -q arm64 || { echo "FATAL: $ai not arm64"; exit 1; }
 done
@@ -329,6 +340,15 @@ cp "$SRC/cont/LuaUI/ctrlpanel.txt" "$RESOURCES/LuaUI/ctrlpanel.txt"
 cp "$SRC/cont/cmdcolors.txt" "$RESOURCES/cmdcolors.txt"
 test -s "$RESOURCES/LuaUI/ctrlpanel.txt" || { echo "FATAL: cont/LuaUI/ctrlpanel.txt missing from $SRC"; exit 1; }
 test -s "$RESOURCES/cmdcolors.txt" || { echo "FATAL: cont/cmdcolors.txt missing from $SRC"; exit 1; }
+if [ "$PROFILE" = "engine" ]; then
+  # Engine-only distribution: the full default UI, as the official engine
+  # archives ship it (LuaUI/, luaui.lua, ctrlpanel.txt, example widgets), for
+  # games that do not bring their own. Not in the bar profile: a loose main.lua
+  # would shadow BAR's own UI (see the ctrlpanel note above).
+  cp -R "$SRC/cont/LuaUI/." "$RESOURCES/LuaUI/"
+  cp "$SRC/cont/luaui.lua" "$SRC/cont/ctrlpanel.txt" "$RESOURCES/"
+  cp -R "$SRC/cont/examples" "$RESOURCES/examples"
+fi
 if [ "$PROFILE" = "bar" ]; then
   # BAR launcher config (chobby_config.json + default springsettings), extracted
   # from the canonical dist_cfg the official launcher uses; the launcher deploys
@@ -477,12 +497,26 @@ bundle_deps() { # bundle_deps <macho> [<source-dir-for-@rpath-siblings>]
     esac
   done
 }
-for b in "$MACOS/spring" "$MACOS/spring-headless" "$MACOS/pr-downloader"; do
+for b in "$MACOS/spring" "$MACOS/spring-headless" "$MACOS/spring-dedicated" "$MACOS/pr-downloader"; do
   [ -f "$b" ] || continue
   bundle_deps "$b"
   install_name_tool -add_rpath "@executable_path/../Frameworks" "$b" 2>/dev/null || true
 done
+# unitsync is loaded by OTHER programs (lobbies), so @executable_path would be
+# theirs: it finds the bundled dylibs relative to itself instead.
+if [ -f "$MACOS/libunitsync.dylib" ]; then
+  chmod u+w "$MACOS/libunitsync.dylib"
+  install_name_tool -id "@rpath/libunitsync.dylib" "$MACOS/libunitsync.dylib" 2>/dev/null
+  bundle_deps "$MACOS/libunitsync.dylib"
+  install_name_tool -add_rpath "@loader_path/../Frameworks" "$MACOS/libunitsync.dylib" 2>/dev/null || true
+fi
 for d in "$FRAMEWORKS"/*.dylib; do bundle_deps "$d"; done
+
+# engine-profile extras, when staged (an array: the bundle path has a space)
+EXTRA_MACHO=()
+for x in spring-headless spring-dedicated libunitsync.dylib; do
+  if [ -f "$MACOS/$x" ]; then EXTRA_MACHO+=("$MACOS/$x"); fi
+done
 
 # Build machines leak LC_RPATHs into binaries (brew lib dirs, build trees).
 # Inside the bundle those must not exist: a foreign rpath makes dyld resolve
@@ -499,14 +533,14 @@ strip_foreign_rpaths() { # strip_foreign_rpaths <macho>
     esac
   done
 }
-for m in "$MACOS/spring" "$MACOS/pr-downloader" "$FRAMEWORKS"/*.dylib; do
+for m in "$MACOS/spring" "$MACOS/pr-downloader" ${EXTRA_MACHO[@]+"${EXTRA_MACHO[@]}"} "$FRAMEWORKS"/*.dylib; do
   strip_foreign_rpaths "$m"
 done
 for d in "$FRAMEWORKS"/*.dylib; do
   install_name_tool -add_rpath "@loader_path" "$d" 2>/dev/null || true
 done
 AUDIT_FAIL=0
-for m in "$MACOS/spring" "$MACOS/pr-downloader" "$FRAMEWORKS"/*.dylib; do
+for m in "$MACOS/spring" "$MACOS/pr-downloader" ${EXTRA_MACHO[@]+"${EXTRA_MACHO[@]}"} "$FRAMEWORKS"/*.dylib; do
   # dylibs print their own LC_ID_DYLIB as line 2 — skip it (IDs are
   # normalized to @rpath above; only real DEPENDENCIES matter here)
   skip=2; case "$m" in *.dylib) skip=3;; esac
