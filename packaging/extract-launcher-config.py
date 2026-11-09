@@ -39,7 +39,15 @@ def main():
     with open(os.path.join(out_dir, "chobby_config.json"), "w") as f:
         json.dump(jf, f, indent=2)
 
-    ss = cfg.get("default_springsettings", {})
+    ss = dict(cfg.get("default_springsettings", {}))
+    # The official launcher also applies the chosen setup's launch.springsettings
+    # (RapidTagResolutionOrder lives there). Without it Chobby falls back to the
+    # old springrts rapid repos. Found by Dimaris-nsk (Vandomas/RecoilEngine-
+    # AppleSilicon PR #18); taken from the data here instead of hard-coded.
+    for setup in cfg.get("setups", []):
+        if setup.get("package", {}).get("id") == "manual-linux":
+            for k, v in (setup.get("launch", {}).get("springsettings") or {}).items():
+                ss.setdefault(k, v)
     with open(os.path.join(out_dir, "default_springsettings.cfg"), "w") as f:
         for k in sorted(ss):
             if k in OWNED:
