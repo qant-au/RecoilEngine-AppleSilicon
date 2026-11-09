@@ -1,4 +1,5 @@
 #include "StreamBuffer.h"
+#include "System/Platform/errorhandler.h"
 
 #include "VBO.h"
 
@@ -83,6 +84,18 @@ void IStreamBufferConcept::WaitBuffer(GLsync& syncObj) const
 			break;
 
 		gWaitCount++;
+#if defined(__APPLE__) && !defined(HEADLESS)
+		// A lost or hung GPU never signals the fence, and this loop used to spin
+		// forever with no reason given (the watchdog's hang report came much
+		// later). GL_WAIT_FAILED, or 10 s with nothing completed (40000 x 250 us),
+		// means the graphics device has stopped: say so and quit. Idea from
+		// Vandomas/RecoilEngine-AppleSilicon a8511496b9 (bounded present waits).
+		if (waitReturn == GL_WAIT_FAILED || gWaitCount >= 40000u) {
+			LOG_L(L_ERROR, "[IStreamBuffer::WaitBuffer] the GPU stopped completing work (%s after %u waits on %s)",
+				waitReturn == GL_WAIT_FAILED ? "wait failed" : "timeout", gWaitCount, name.c_str());
+			ErrorMessageBox("The graphics device stopped responding, so the game has to close. Restarting the game usually fixes this.", "Graphics device lost", MBF_OK | MBF_EXCL);
+		}
+#endif
 	}
 	glDeleteSync(syncObj);
 	syncObj = {};
