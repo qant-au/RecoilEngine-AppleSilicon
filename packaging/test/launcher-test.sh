@@ -172,7 +172,7 @@ S
 chmod +x "$RES/download-content.sh"
 run "$WD12" BAR_ASSUME_CONSENT=1
 { [ "$(cat "$WD12/rapid/host/byar/versions.gz")" = "OLD-VERSION" ] \
-  && [ ! -d "$WD12/rapid.pre-update" ] && has spring-launched; } \
+  && [ ! -d "$WD12/rapid.pre-update" ] && [ ! -d "$WD12/rapid.pre-update.ready" ] && has spring-launched; } \
   && ok "failed update -> old rapid metadata restored, game launches" || bad "rollback" "$(calls)"
 
 echo "== partial-update integrity: success keeps new metadata =="
@@ -186,7 +186,7 @@ S
 chmod +x "$RES/download-content.sh"
 run "$WD12" BAR_ASSUME_CONSENT=1
 { [ "$(cat "$WD12/rapid/host/byar/versions.gz")" = "NEW-GOOD" ] \
-  && [ ! -d "$WD12/rapid.pre-update" ]; } \
+  && [ ! -d "$WD12/rapid.pre-update" ] && [ ! -d "$WD12/rapid.pre-update.ready" ]; } \
   && ok "successful update -> new metadata kept, snapshot removed" || bad "commit" "$(calls)"
 
 echo "== crashed mid-update (leftover snapshot) -> restored on next launch =="
@@ -196,6 +196,15 @@ echo "NEW-GOOD" > "$WD12/rapid.pre-update/host/byar/versions.gz"   # what a cras
 run "$WD12" BAR_ASSUME_CONSENT=1
 [ "$(cat "$WD12/rapid/host/byar/versions.gz")" = "NEW-GOOD" ] \
   && ok "leftover snapshot rolled back before checking" || bad "crash recovery"
+echo "NEWER-PARTIAL" > "$WD12/rapid/host/byar/versions.gz"
+mkdir -p "$WD12/rapid.pre-update.ready/host/byar" "$WD12/rapid.pre-update.tmp/host/byar"
+echo "READY-GOOD" > "$WD12/rapid.pre-update.ready/host/byar/versions.gz"
+echo "TMP-PARTIAL" > "$WD12/rapid.pre-update.tmp/host/byar/versions.gz"   # interrupted copy
+printf '%s\n' '#!/bin/bash' 'case "$*" in *--print-server*) echo x; exit 0;; esac' 'WD=""; while [ $# -gt 0 ]; do case "$1" in --writedir) WD=$2; shift 2;; *) shift;; esac; done' 'echo NEW-BROKEN > "$WD/rapid/host/byar/versions.gz"' "printf '@E:content boom\\n'; exit 7" > "$RES/download-content.sh"
+chmod +x "$RES/download-content.sh"
+run "$WD12" BAR_ASSUME_CONSENT=1
+[ "$(cat "$WD12/rapid/host/byar/versions.gz")" = "READY-GOOD" ] \
+  && ok "leftover ready backup restored; an interrupted .tmp copy is never used" || bad "ready-backup crash recovery"
 
 echo "== skip button: downloader killed, rollback, game launches =="
 cat > "$RES/download-content.sh" <<'S'

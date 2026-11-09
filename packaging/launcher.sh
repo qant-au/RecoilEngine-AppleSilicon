@@ -424,11 +424,18 @@ I hope online play can be enabled very soon." || true
     exit 1
   }
   restore_rapid() {
-    # Old launchers copied directly into this name, so even a full-looking
-    # legacy backup may be incomplete. Do not choose between it and rapid.
+    # A backup under the old name comes from an earlier version of this app that
+    # was force-quit mid-update. That version restored it unconditionally, so do
+    # the same rather than refusing to start (Adam, 2026-11-09); anything that is
+    # not a plain directory is simply discarded.
     if [ -e "$RAPID_LEGACY" ] || [ -L "$RAPID_LEGACY" ]; then
-      RAPID_ERROR="An older backup exists at $RAPID_LEGACY. Its completeness is unknown; the backup and current metadata have been left unchanged."
-      return 1
+      if [ -d "$RAPID_LEGACY" ] && [ ! -L "$RAPID_LEGACY" ]; then
+        rm -rf "$RAPID_DIR"
+        if mv "$RAPID_LEGACY" "$RAPID_DIR" 2>/dev/null; then
+          printf 'rapid metadata restored from an old-style backup\n' >> "$LOG"
+        fi
+      fi
+      rm -rf "$RAPID_LEGACY" 2>/dev/null
     fi
     if [ -e "$RAPID_BAK" ] || [ -L "$RAPID_BAK" ]; then
       if [ ! -d "$RAPID_BAK" ] || [ -L "$RAPID_BAK" ]; then
