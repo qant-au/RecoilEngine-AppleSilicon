@@ -316,7 +316,9 @@ This port stands on a lot of prior work, gratefully:
 - **Fixes taken from other macOS work**, with authorship kept in the commits:
   - **[Vandomas](https://github.com/Vandomas/RecoilEngine-AppleSilicon)**: sound
     decoding outside the sound lock, from
-    [RecoilEngine#3276](https://github.com/beyond-all-reason/RecoilEngine/pull/3276).
+    [RecoilEngine#3276](https://github.com/beyond-all-reason/RecoilEngine/pull/3276);
+    rebuilding the picture when the window changes display, and Retina mouse
+    positions in the engine's own start menu, from his fork.
   - **[tomjn](https://github.com/tomjn)**: the NEON FPCR check, from
     [RecoilEngine#3689](https://github.com/beyond-all-reason/RecoilEngine/pull/3689).
   - **[yeojuny](https://github.com/yeojuny)**: found the `SHIELD_POWER`
