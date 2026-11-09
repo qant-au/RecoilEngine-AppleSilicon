@@ -100,6 +100,15 @@ ENABLE_ONLINE="${BAR_ONLINE:-0}"
 # --messages-config <https-url> or --messages-local <path> (a local file,
 # baked as a file:// URL — for testing builds against an unpublished config).
 MESSAGES_CONFIG="${BAR_MESSAGES_CONFIG:-https://raw.githubusercontent.com/qant-au/RecoilEngine-AppleSilicon/main/message-config/messages.json}"
+# In-app updater (acu-030, packaging/updater.swift). The app checks UPDATE_FEED
+# each launch; the release key's PUBLIC half (packaging/update-public-key) is
+# baked in, and when the PRIVATE half is on this machine the build also writes
+# a signed appcast.json beside the zip. Publish both with the release: the
+# zip at UPDATE_DOWNLOAD_BASE/v<port>/, appcast.json as a release asset so
+# releases/latest/download/appcast.json always names the newest one.
+UPDATE_FEED="${ACCURONA_UPDATE_FEED:-https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json}"
+UPDATE_DOWNLOAD_BASE="${ACCURONA_UPDATE_DOWNLOAD_BASE:-https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/download}"
+UPDATE_SIGNING_KEY="${ACCURONA_UPDATE_SIGNING_KEY:-$HOME/.accurona/update-signing.key}"
 
 # Test tiers (mirrors upstream Recoil CI: the *build* workflow only builds +
 # packages; ALL test stages are OPT-IN as of 2026-07-20 — plain builds stay
@@ -135,6 +144,7 @@ while [ $# -gt 0 ]; do
     --enable-online) ENABLE_ONLINE=1; shift;;   # DELIBERATE opt-in; never for a public artifact
     --disable-online) ENABLE_ONLINE=0; shift;;  # now the default; kept for explicitness
     --messages-config) MESSAGES_CONFIG=$2; shift 2;;
+    --update-feed) UPDATE_FEED=$2; shift 2;;
     --messages-local)
       [ -f "$2" ] || { echo "FATAL: --messages-local $2: no such file"; exit 2; }
       MESSAGES_CONFIG="file://$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; shift 2;;
@@ -286,6 +296,9 @@ if [ "$PROFILE" = "bar" ]; then
   # spring-launcher protocol bridge for the lobby (replays, downloads); see sl-bridge.swift
   swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/sl-bridge" "$PKG/sl-bridge.swift" \
     || { echo "FATAL: sl-bridge.swift failed to compile"; exit 1; }
+  # in-app updater (signed feed, Ed25519 via CryptoKit); see updater.swift
+  swiftc -O -target "$SWIFT_TARGET" -o "$MACOS/updater" "$PKG/updater.swift" \
+    || { echo "FATAL: updater.swift failed to compile"; exit 1; }
 fi
 # base content archives (engine-built sdz)
 mkdir -p "$RESOURCES/base"
@@ -418,6 +431,9 @@ NEUTER
   # this staged file; BAR_MESSAGE_CONFIG_URL still overrides at runtime).
   printf '%s' "$MESSAGES_CONFIG" > "$RESOURCES/.message-config-url"
   echo "message config: $MESSAGES_CONFIG"
+  cp "$PKG/update-public-key" "$RESOURCES/update-public-key"
+  printf '%s' "$UPDATE_FEED" > "$RESOURCES/.update-feed-url"
+  echo "update feed: $UPDATE_FEED"
 fi
 
 # Mesa driver dylibs + ICD json (paths inside json rewritten to @loader_path-
@@ -781,6 +797,16 @@ if [ "$IDENTITY" != "-" ] && [ "${#NOTARY_AUTH[@]}" -gt 0 ]; then
 else
   echo "(skipped: ad-hoc signature or no notarization auth; Gatekeeper will"
   echo " reject this artifact on other machines — for local testing only)"
+fi
+
+if [ "$PROFILE" = "bar" ]; then
+  if [ -f "$UPDATE_SIGNING_KEY" ]; then
+    "$MACOS/updater" sign --key "$UPDATE_SIGNING_KEY" --archive "$ZIP" --version "$PORTVER" \
+      --url "$UPDATE_DOWNLOAD_BASE/v${PORTVER}/$(basename "$ZIP")" --min-system "${MACOSX_DEPLOYMENT_TARGET}" \
+      --out "$OUT/appcast.json" || { echo "FATAL: could not sign the update feed"; exit 1; }
+  else
+    echo "(no update signing key at $UPDATE_SIGNING_KEY: appcast.json not written, so this build cannot be offered as an in-app update)"
+  fi
 fi
 
 echo "=== [6c/7] DMG (styled drag-to-Applications)"

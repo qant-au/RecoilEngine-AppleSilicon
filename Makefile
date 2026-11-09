@@ -71,7 +71,8 @@ test:
 	packaging/test/engine-nudge-test.sh
 	packaging/test/launcher-test.sh
 	packaging/test/sl-bridge-test.sh
+	packaging/test/updater-test.sh
 	packaging/test/dialog-center-test.sh   # shows real windows; skips without a screen
 
 clean-artifacts:
-	rm -rf "release-artifacts/Accurona.app" release-artifacts/*.zip release-artifacts/*.dmg
+	rm -rf "release-artifacts/Accurona.app" release-artifacts/*.zip release-artifacts/*.dmg release-artifacts/appcast.json

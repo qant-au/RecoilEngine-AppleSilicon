@@ -138,6 +138,22 @@ the new version — `"target": {"op": "le", "version": "<last-disabled>"}`).
 Propose the concrete message changes and get the maintainer's explicit
 sign-off before publishing the release.
 
+**In-app updates (`packaging/updater.swift`).** Each launch the app reads a
+signed feed, by default
+`https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json`
+(`--update-feed` on `release-build.sh` changes it). When the private release
+key is at `~/.accurona/update-signing.key`, `make app` writes
+`release-artifacts/appcast.json` beside the zip. Publish both as assets of the
+release tagged `v<PORT_VERSION>`, and every install older than it offers the
+update. The app only installs an archive that verifies against the public key in
+`packaging/update-public-key`, has our bundle identifier and the promised
+version, and passes `codesign --verify --deep --strict` (and, once releases are
+Developer ID signed, has the same team). **Back up the private key.** If it is
+lost, existing installs can never be updated in-app again; they still see the
+engine nudge and can download by hand. To replace the key, ship one release
+signed with the old key that carries the new public key. `packaging/test/updater-test.sh`
+covers the swap and every refusal.
+
 ## What to upstream (keep the layer shrinking)
 
 `docs/UPSTREAM_CANDIDATES.md` tracks the fixes that belong upstream (LuaVAO

@@ -307,6 +307,22 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
   fi
 
   if [ "${BAR_ASSUME_CONSENT:-0}" != "1" ]; then
+    # 0) IN-APP UPDATE (acu-030). The updater reads a signed feed published
+    #    with each release; when it names a newer app and the player accepts,
+    #    it downloads, verifies (Ed25519 release key baked into this build,
+    #    bundle id, version, code signature) and swaps the app once this
+    #    launcher has exited, then opens the new one (exit 3 = quit now).
+    #    Fail-open like the message config. A build without a public key has
+    #    updates off. ACCURONA_UPDATE_FEED overrides the baked feed URL.
+    if [ -x "$HERE/updater" ] && [ -s "$RES/update-public-key" ] && [ "${ACCURONA_SKIP_UPDATE:-0}" != "1" ]; then
+      UPDATE_FEED="${ACCURONA_UPDATE_FEED:-$(cat "$RES/.update-feed-url" 2>/dev/null)}"
+      if [ -n "$UPDATE_FEED" ]; then
+        "$HERE/updater" check --feed "$UPDATE_FEED" --key-file "$RES/update-public-key" \
+          --app "$(dirname "$CONTENTS")" --current "$PORT_VERSION" \
+          --seen-file "$WRITEDIR/.update-skipped" --wait-pid "$$" --timeout 4
+        [ "$?" = "3" ] && exit 0
+      fi
+    fi
     # 1) REMOTE messages (announcements + kill-switch for bad builds).
     #    Fail-open by design: offline / config host down -> exit 0, continue.
     #    THIS is exactly why the disclaimer (step 3) is LOCAL and hardcoded —
