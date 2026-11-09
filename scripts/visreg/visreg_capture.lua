@@ -29,6 +29,10 @@ local still = 0
 local function log(s) Spring.Echo("[visreg] " .. s) end
 
 function widget:Initialize()
+  -- the player's pointer may rest on the window edge: edge scrolling would then
+  -- move the camera during a shot (isolated write dir, so nothing persists)
+  Spring.SetConfigFloat("EdgeMoveWidth", 0)
+  Spring.SetConfigInt("WindowedEdgeMove", 0)
   local text = VFS.LoadFile("LuaUI/visreg_frames.txt", VFS.RAW)
   if not text then log("FATAL no LuaUI/visreg_frames.txt"); return end
   for line in text:gmatch("[^\n]+") do

@@ -75,6 +75,8 @@ WindowPosX = 40
 WindowPosY = 40
 WindowBorderless = 0
 VSync = 0
+EdgeMoveWidth = 0
+WindowedEdgeMove = 0
 CFG
 
 echo "visreg: $NAME on $ENGINE_VER (window opens for about two minutes)"
