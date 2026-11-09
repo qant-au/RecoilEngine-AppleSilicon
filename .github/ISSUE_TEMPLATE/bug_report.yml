@@ -53,7 +53,7 @@ body:
     id: port-version
     attributes:
       label: Port version
-      description: "BAR Launcher → right-click in Applications → Get Info, or the version in the DMG name."
+      description: "Accurona → right-click in Applications → Get Info, or the version in the DMG name."
       placeholder: "e.g. 0.11"
     validations:
       required: true
@@ -63,6 +63,6 @@ body:
     attributes:
       label: Crash report (if the game crashed hard)
       description: |
-        If macOS showed a crash dialog or the game vanished: Finder → <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> → `~/Library/Logs/DiagnosticReports` — drag in the newest file starting with `spring` or `BAR Launcher`.
+        If macOS showed a crash dialog or the game vanished: Finder → <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> → `~/Library/Logs/DiagnosticReports` — drag in the newest file starting with `spring` or `Accurona`.
     validations:
       required: false

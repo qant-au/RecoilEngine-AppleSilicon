@@ -21,20 +21,20 @@ model) — see
 [How Recoil was Enhanced for Apple Silicon](#how-recoil-was-enhanced-for-apple-silicon).
 
 ## Downloading
-For convenience, releases also include an **optional BAR launcher package**: a
-drag-to-install app that  downloads **[Beyond All Reason](https://www.beyondallreason.info/)**
+For convenience, releases also include **Accurona**, an optional
+drag-to-install app that downloads **[Beyond All Reason](https://www.beyondallreason.info/)**
 from its official online location and configures the engine to play it.
 
 **Two downloads** on the [releases page](https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest):
 
 | Artifact | What it is | For whom |
 |---|---|---|
-| `BAR-macos-<ver>.dmg` | **If you want to play BAR on macOS** — the engine plus a BAR launcher: a drag-to-install app that (after an explicit consent prompt) downloads Beyond All Reason from BAR's official content network, keeps it updated, and launches straight into its lobby. | Players who want to play BAR on a Mac. |
-| `Recoil-macos-<engine>-port<ver>.zip` | **The project itself** — the engine port: signed, notarized `spring`, `spring-headless`, and `pr-downloader` with the bundled Metal driver stack. No game content or configuration. | Any Recoil/Spring game community, tooling, or anyone building their own game launcher on top. |
+| `Accurona-v<ver>.dmg` | **If you want to play BAR on macOS** — Accurona: the engine plus a drag-to-install app that (after an explicit consent prompt) downloads Beyond All Reason from BAR's official content network, keeps it updated, and launches straight into its lobby. | Players who want to play BAR on a Mac. |
+| `Recoil-macos-<engine>-port<ver>.zip` | **The project itself** — the engine port: signed, notarized `spring`, `spring-headless`, `spring-dedicated`, `libunitsync`, `pr-downloader` and the AIs (BARb, CircuitAI, NullAI), with the bundled Metal driver stack and the default UI files, the same set as the official Linux engine archive. No game content or configuration. | Any Recoil/Spring game community, tooling, or anyone building their own game launcher on top. |
 
 <p align="center">
   <a href="https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest"><b>⬇&nbsp; Download for macOS (Apple Silicon)</b></a>
-  &nbsp;·&nbsp; engine port + optional BAR launcher &nbsp;·&nbsp; macOS 27+
+  &nbsp;·&nbsp; engine port + optional Accurona app &nbsp;·&nbsp; macOS 27+
 </p>
 
 > [!CAUTION]
@@ -196,9 +196,9 @@ and [Homebrew](https://brew.sh) — the build installs the packages it needs
 (SDL2, LLVM 19 for the driver compile, openal-soft, …) as it goes.
 
 ```sh
-make app         # the BAR launcher package: pinned Mesa driver (cached
+make app         # Accurona, the BAR app: pinned Mesa driver (cached
                  # after the first build) -> engine + determinism gates ->
-                 # BAR Launcher.app + .dmg (ad-hoc signed, local use)
+                 # Accurona.app + .dmg (ad-hoc signed, local use)
 make engine-dist # the Recoil engine alone (no BAR helper/branding):
                  # Recoil-macos-<engine>-port<ver>.zip
 make certify     # app + full replay-determinism certification (GPU, ~1h)

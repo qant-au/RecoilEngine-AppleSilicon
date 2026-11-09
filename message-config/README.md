@@ -1,8 +1,8 @@
 # RecoilEngine-AppleSilicon — launcher messages
 
-The **BAR Launcher** fetches a single file, [`messages.json`](messages.json),
+**Accurona** fetches a single file, [`messages.json`](messages.json),
 on startup to show announcements or, when needed, to block a known-bad build.
-It is read only by the BAR Launcher (not the plain engine build). Editing it is
+It is read only by Accurona (not the plain engine build). Editing it is
 how you talk to everyone who has the launcher installed — no app update needed.
 
 ## Editing (one file per message)

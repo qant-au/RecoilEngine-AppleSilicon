@@ -13,7 +13,7 @@
 # Exit 0 = PASS. Nonzero = a classified failure is printed.
 set -uo pipefail
 
-APP="${1:-release-artifacts/BAR Launcher.app}"
+APP="${1:-release-artifacts/Accurona.app}"
 CAP=90
 KEEP=0
 WD=""

@@ -1,5 +1,5 @@
 #!/bin/bash
-# BAR Launcher.app entrypoint (CFBundleExecutable).
+# Accurona.app entrypoint (CFBundleExecutable).
 # Responsibilities, in order:
 #   1. wire the bundled Mesa Zink -> KosmicKrisp -> Metal driver env
 #      (bundle-relative paths only; nothing machine-specific);
@@ -27,7 +27,7 @@ fail_dialog() { # self-addressed AppleScript dialog: no Automation TCC involved.
   osascript >/dev/null 2>&1 <<OSA || true
 tell application "System Events"
   activate
-  display dialog "$1" buttons {"OK"} default button 1 with title "BAR Launcher" with icon caution
+  display dialog "$1" buttons {"OK"} default button 1 with title "Accurona" with icon caution
 end tell
 OSA
 }
@@ -511,7 +511,7 @@ I hope online play can be enabled very soon." || true
     MSG="${ERR_TEXT:-The first-run download failed (code ${RC}).}"
     ERRHELP="$HERE/error-dialog"
     if [ -x "$ERRHELP" ]; then
-      "$ERRHELP" --title "BAR Launcher" --message "[${ERR_CODE:-unknown}] $MSG" --logfile "$LOG"
+      "$ERRHELP" --title "Accurona" --message "[${ERR_CODE:-unknown}] $MSG" --logfile "$LOG"
     else
       fail_dialog "$MSG"$'\n\n'"Details: $LOG"
     fi

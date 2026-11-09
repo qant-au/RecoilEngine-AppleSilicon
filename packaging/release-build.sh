@@ -1,7 +1,7 @@
 #!/bin/bash
 # release-build.sh — end-to-end signed/notarized release artifact pipeline.
 #
-# Produces BAR Launcher.app (staged, signed, optionally notarized) from
+# Produces Accurona.app (staged, signed, optionally notarized) from
 # the pinned engine tree + pinned/patched Mesa, with EVERY release gate
 # unskippable in-line:
 #   build (via scripts/build-engine.sh: -O3 RELWITHDEBINFO, gcc dbl-64 swap,
@@ -149,7 +149,7 @@ while [ $# -gt 0 ]; do
 done
 
 case "$PROFILE" in
-  bar)    APP="$OUT/BAR Launcher.app";;
+  bar)    APP="$OUT/Accurona.app";;
   engine) APP="$OUT/Recoil Engine.app";;
   *) echo "unknown --profile: $PROFILE (bar|engine)"; exit 2;;
 esac
@@ -212,7 +212,7 @@ echo "=== [1c/7] visreg (visual/artifact/perf regression)"
 if [ "$RUN_VISREG" = "1" ]; then
   VR_ARGS=()
   [ "$RUN_VISREG_PERF" = "1" ] && VR_ARGS+=(--perf)
-  # visreg plays the LAST BUILT app bundle (release-artifacts/BAR Launcher.app):
+  # visreg plays the LAST BUILT app bundle (release-artifacts/Accurona.app):
   # the bare build-engine binary cannot load the bundled Vulkan loader
   VISREG_BUILD="$BUILD" VISREG_MESA="$MESA_PREFIX" \
     "$BAR/scripts/visreg.sh" ${VR_ARGS[@]+"${VR_ARGS[@]}"} \
@@ -628,15 +628,15 @@ echo "builder-path audit: no /Users/ paths anywhere in the bundle"
 # (launcher entrypoint, BAR icon); the engine bundle is neutral Recoil (spring
 # entrypoint, no game branding, engine version user-facing).
 if [ "$PROFILE" = "bar" ]; then
-  PLIST_ID="dev.bar-macos.bar-launcher"
-  PLIST_NAME="BAR Launcher"
+  PLIST_ID="com.accurona.app"
+  PLIST_NAME="Accurona"
   PLIST_EXEC="launcher"
   PLIST_SHORTVER="$PORTVER"
   PLIST_ICON_KEYS='<key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIconName</key><string>AppIcon</string>'
-  PLIST_LAN_NAME="BAR Launcher (and the game it launches)"
+  PLIST_LAN_NAME="Accurona (and the game it launches)"
 else
-  PLIST_ID="dev.bar-macos.recoil-engine"
+  PLIST_ID="com.accurona.recoil-engine"
   PLIST_NAME="Recoil Engine"
   PLIST_EXEC="spring"
   PLIST_SHORTVER="$VERSION"
@@ -682,7 +682,7 @@ if [ "$PROFILE" = "bar" ]; then
   cp "$PKG/AppIcon.icns" "$RESOURCES/AppIcon.icns"
   echo "app icon staged: Assets.car + AppIcon.icns"
 
-  # Spotlight keywords: the app is named "BAR Launcher" (it is not the game),
+  # Spotlight keywords: the app is named "Accurona" (it is not the game),
   # but users will search for the game's name — kMDItemKeywords lets Spotlight
   # (and Raycast/Alfred) match "Beyond All Reason" without the app claiming
   # that name. Stored as an xattr (binary plist array); xattrs are outside the
@@ -767,7 +767,7 @@ echo "codesign OK (identity: ${IDENTITY})"
 echo "=== [6/7] notarization"
 mkdir -p "$OUT"
 if [ "$PROFILE" = "bar" ]; then
-  ZIP="$OUT/BAR-Launcher-v${PORTVER}.zip"
+  ZIP="$OUT/Accurona-v${PORTVER}.zip"
 else
   ZIP="$OUT/Recoil-macos-${VERSION}-port${PORTVER}.zip"
 fi
@@ -788,8 +788,8 @@ if [ "$PROFILE" != "bar" ]; then
   DMG="(none — engine profile ships the notarized zip only)"
   echo "(skipped — the engine bundle is consumed by tooling/other launchers, not drag-installed)"
 else
-DMG="$OUT/BAR-Launcher-v${PORTVER}.dmg"
-VOLNAME="Install BAR Launcher"
+DMG="$OUT/Accurona-v${PORTVER}.dmg"
+VOLNAME="Install Accurona"
 rm -f "$DMG"
 DMGROOT=$(mktemp -d)
 cp -R "$APP" "$DMGROOT/"

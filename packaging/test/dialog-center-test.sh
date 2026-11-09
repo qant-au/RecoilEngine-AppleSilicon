@@ -106,7 +106,7 @@ check "online-disabled notice" "$WORK/consent-dialog" --notice "ONLINE PLAY IS D
 The game opens on a sign-in screen first — press Cancel to reach everything that works offline: skirmish against AI, replays, and local-network (LAN) games."
 
 echo "== the other pre-game windows =="
-check "error dialog" "$WORK/error-dialog" --title "BAR Launcher" \
+check "error dialog" "$WORK/error-dialog" --title "Accurona" \
       --message "[network] Could not reach the content servers."
 check "remote message" "$WORK/message-check" --config-url "file://$WORK/msg.json" \
       --app-version 0.12 --seen-file "$WORK/seen.json"

@@ -71,7 +71,7 @@ final class ProgressController: NSObject, NSApplicationDelegate {
     var shownAt = Date()
 
     func applicationDidFinishLaunching(_ n: Notification) {
-        window.title = "BAR Launcher"
+        window.title = "Accurona"
         centerOnActiveScreen(window)   // fixed contentRect: size is already final
         window.isReleasedWhenClosed = false
 

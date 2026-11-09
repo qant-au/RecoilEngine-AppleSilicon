@@ -41,7 +41,7 @@ func centerOnActiveScreen(_ w: NSWindow) {
     w.setFrameOrigin(NSPoint(x: max(vis.minX, x), y: max(vis.minY, y)))
 }
 
-let title = arg("--title") ?? "BAR Launcher"
+let title = arg("--title") ?? "Accurona"
 var message = arg("--message") ?? ""
 if message.isEmpty {
     message = String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8) ?? ""

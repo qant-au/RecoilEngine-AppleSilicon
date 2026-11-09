@@ -12,7 +12,7 @@ ROOT=$(mktemp -d)
 # kill any launcher/stub child still referencing our sandbox before removing it
 # (so a killed run can never orphan a launcher that then pops a GUI dialog)
 trap 'pkill -f "$ROOT" 2>/dev/null; rm -rf "$ROOT"' EXIT INT TERM
-APP="$ROOT/BAR Launcher.app"; MACOS="$APP/Contents/MacOS"; RES="$APP/Contents/Resources"
+APP="$ROOT/Accurona.app"; MACOS="$APP/Contents/MacOS"; RES="$APP/Contents/Resources"
 mkdir -p "$MACOS" "$RES/vulkan/icd.d"
 export CALLS="$ROOT/calls.log"
 
