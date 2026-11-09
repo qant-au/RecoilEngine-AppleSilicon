@@ -317,10 +317,32 @@ This port stands on a lot of prior work, gratefully:
   - **[Vandomas](https://github.com/Vandomas/RecoilEngine-AppleSilicon)**: sound
     decoding outside the sound lock, from
     [RecoilEngine#3276](https://github.com/beyond-all-reason/RecoilEngine/pull/3276);
-    rebuilding the picture when the window changes display, and Retina mouse
-    positions in the engine's own start menu, from his fork.
+    rebuilding the picture when the window changes display, Retina mouse
+    positions in the engine's own start menu, the hardware cursor default with a
+    speed scale, non-blocking UDP sends (RecoilEngine#3293), GPU-loss handling,
+    GL debug markers, log roll-up fixes and bringing the lobby back after an
+    engine error, from his fork.
   - **[tomjn](https://github.com/tomjn)**: the NEON FPCR check, from
-    [RecoilEngine#3689](https://github.com/beyond-all-reason/RecoilEngine/pull/3689).
+    [RecoilEngine#3689](https://github.com/beyond-all-reason/RecoilEngine/pull/3689);
+    first-vertex provoking on KosmicKrisp (#3532), `gl.BeginEnd` in one draw
+    (#3533), rectangle outlines as lines (#3272), the SSD path check (#3690) and
+    headless S3O decoding (#3700).
+  - **[Leon Seemann](https://github.com/leonseemann)**: macOS keyboard fixes
+    (#3540: Cmd as Ctrl, dead keys, AutoFill off, F11/Pause), streamed-buffer
+    orphaning (#3542), persistent model uniforms (#3543), LOS/radar PBO uploads
+    (#3494), S3TC DDS decompression (#3566) and the nano-particle geometry-shader
+    check (#3539).
+  - **[ysommer](https://github.com/ysommer)**: macOS crash stack traces and clean
+    exit (#3546), hidden symbol visibility (#3545).
+  - **[Yeo-Jun Yoon](https://github.com/yeojuny)**: the QTPFS failed-load fix (#3694).
+  - **[moss-orbit-9f339e](https://github.com/moss-orbit-9f339e)**: headless GLSL/NPOT
+    reporting (#3615) and the screenshot deadlock fix (#3631).
+  - **[TonyTheCat](https://github.com/TonyTheCat)**: the mouse-cursor texture leak
+    ([RecoilEngine#3687](https://github.com/beyond-all-reason/RecoilEngine/issues/3687)).
+  - **[Anatolii / Dimaris-nsk](https://github.com/Dimaris-nsk)**: Spring camera for
+    fresh profiles, rotatable-camera scroll speed, content install failure
+    classification, safer rapid backups, and finding the missing
+    RapidTagResolutionOrder (Vandomas fork PRs #15-#19).
   - **[yeojuny](https://github.com/yeojuny)**: found the `SHIELD_POWER`
     ARM64/x86 divergence fixed here,
     [RecoilEngine#3421](https://github.com/beyond-all-reason/RecoilEngine/issues/3421).
