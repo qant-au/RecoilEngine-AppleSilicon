@@ -568,8 +568,16 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
             allowed = p == writeDir.path || p.hasPrefix(writeDir.path + "/")
         }
         if allowed {
+            // the lobby asks for <writedir>/demos/ before any replay exists: create a
+            // folder inside the write dir rather than failing to open it (from
+            // Vandomas/RecoilEngine-AppleSilicon 80e42afbcd), and report open's
+            // real result, not just that it started
+            if u.scheme == "file" && u.path.hasSuffix("/") {
+                try? FileManager.default.createDirectory(atPath: u.path, withIntermediateDirectories: true)
+            }
             let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = [u.absoluteString]
-            let ok = (try? p.run()) != nil
+            var ok = false
+            if (try? p.run()) != nil { p.waitUntilExit(); ok = p.terminationStatus == 0 }
             client.send(ok ? "OpenFileFinished" : "OpenFileFailed", ["path": path])
         } else {
             log("OpenFile refused: \(path)")
