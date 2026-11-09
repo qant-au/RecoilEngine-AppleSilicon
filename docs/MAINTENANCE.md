@@ -80,6 +80,16 @@ runs.
 
 When the fleet moves to a new engine version `NEW` (e.g. 2026.06.08):
 
+Players are told automatically: on every launch the launcher reads BAR's
+production engine from BYAR-Chobby's `dist_cfg/config.json` (setup
+`manual-linux`) and, when it is newer than the engine in the app, shows a
+"New Version Needed" dialog with a download button (`engine_nudge` in
+`packaging/launcher.sh`; test: `packaging/test/engine-nudge-test.sh`). It
+stops by itself once the player installs an app with that engine, so no
+message-config entry is needed. The download button opens
+`BAR_RELEASES_URL` (the fork's latest GitHub release until the release
+location is decided).
+
 1. **Branch from the upstream tag**, not from the old macOS branch:
    ```sh
    git fetch upstream --tags

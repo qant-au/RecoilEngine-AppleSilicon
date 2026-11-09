@@ -249,6 +249,37 @@ MESSAGE_SEEN="$WRITEDIR/.message-seen"
 MESSAGE_CONFIG_URL="${BAR_MESSAGE_CONFIG_URL:-$(cat "$RES/.message-config-url" 2>/dev/null || echo "https://raw.githubusercontent.com/qant-au/RecoilEngine-AppleSilicon/main/message-config/messages.json")}"
 PORT_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$CONTENTS/Info.plist" 2>/dev/null || echo 0)"
 
+# Engine nudge (see step 1b below). Engine versions are YYYY.MM.DD, so the
+# digits compare as integers.
+BAR_DIST_CFG_URL="${BAR_DIST_CFG_URL:-https://raw.githubusercontent.com/beyond-all-reason/BYAR-Chobby/master/dist_cfg/config.json}"
+BAR_RELEASES_URL="${BAR_RELEASES_URL:-https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest}"
+engine_nudge() {
+  local ours prod cfg dir i id
+  ours="$(/usr/libexec/PlistBuddy -c "Print :EngineVersion" "$CONTENTS/Info.plist" 2>/dev/null)" || return 0
+  dir="$(mktemp -d 2>/dev/null)" || return 0
+  cfg="$dir/config.json"
+  curl -fsS --max-time 4 -o "$cfg" "$BAR_DIST_CFG_URL" 2>/dev/null || { rm -rf "$dir"; return 0; }
+  prod=""
+  for i in 0 1 2 3 4 5 6 7 8 9; do
+    id="$(plutil -extract "setups.$i.package.id" raw -o - "$cfg" 2>/dev/null)" || break
+    if [ "$id" = "manual-linux" ]; then
+      prod="$(plutil -extract "setups.$i.launch.engine" raw -o - "$cfg" 2>/dev/null)"
+      break
+    fi
+  done
+  prod="${prod#recoil_}"
+  case "$prod" in [0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]) ;; *) rm -rf "$dir"; return 0;; esac
+  case "$ours" in [0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]*) ;; *) rm -rf "$dir"; return 0;; esac
+  if [ "$((10#${prod//./}))" -gt "$((10#$(echo "${ours:0:10}" | tr -d .)))" ]; then
+    printf '%s' '{"schema":1,"messages":[{"id":"engine-'"$prod"'","date":"2000-01-01","target":{"op":"all"},"title":"New Version Needed","body":["<p style='"'"'font-family:-apple-system;font-size:13px'"'"'>Beyond All Reason has moved to engine '"$prod"'. This app has engine '"${ours:0:10}"', so online games will not work until you install a newer version of the app.</p><p style='"'"'font-family:-apple-system;font-size:13px'"'"'>Skirmish, replays of older games and LAN games still work on this one.</p>"],"frequency":"always","buttons":[{"label":"Download the New Version","action":"open-url","url":"'"$BAR_RELEASES_URL"'","then":"quit","default":true},{"label":"Continue","action":"continue"}]}]}' > "$dir/messages.json"
+    "$HERE/message-check" --config-url "file://$dir/messages.json" \
+      --app-version "$PORT_VERSION" --seen-file "$dir/seen" --timeout 4
+    [ "$?" = "2" ] && { rm -rf "$dir"; exit 0; }
+  fi
+  rm -rf "$dir"
+  return 0
+}
+
 if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
   FIRST_RUN=1; [ -f "$DONE_SENTINEL" ] && FIRST_RUN=0
   # Is skipping this check SAFE — i.e. is there a complete, playable install to
@@ -276,6 +307,16 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
       "$HERE/message-check" --config-url "$MESSAGE_CONFIG_URL" \
         --app-version "$PORT_VERSION" --seen-file "$MESSAGE_SEEN" --timeout 4
       [ "$?" = "2" ] && exit 0
+    fi
+    # 1b) ENGINE NUDGE (oth-030). Windows/Linux launchers download a new engine
+    #     when BAR production moves; this app carries its engine, so players
+    #     need a new app instead. Read the production engine from BYAR-Chobby's
+    #     dist_cfg (the same file the official launcher uses) and, when it is
+    #     NEWER than the engine in this app, say so. Fail-open and optional:
+    #     offline, unparseable or not newer -> nothing is shown. Only newer
+    #     counts: this app may run ahead of production (2026.09.02 vs .07.04).
+    if [ -x "$HERE/message-check" ] && [ "${BAR_SKIP_ENGINE_NUDGE:-0}" != "1" ]; then
+      engine_nudge || true
     fi
     if [ -x "$HERE/consent-dialog" ]; then
       # 2) ONLINE PLAY IS DISABLED notice — LOCAL, shown once per NOTICE_VERSION.
