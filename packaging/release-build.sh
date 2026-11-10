@@ -973,7 +973,8 @@ rm -rf "$DMGROOT"
 # the image if anything below fails.
 # The physical path (pwd -P): the layout step records the background picture
 # relative to the mount point the system reports, which is the resolved one.
-MOUNTPT=$(cd "$(mktemp -d)" && pwd -P)
+MOUNTPT=$(mktemp -d) && [ -n "$MOUNTPT" ] && [ -d "$MOUNTPT" ] || { echo "FATAL: could not create a mount point"; exit 1; }
+MOUNTPT=$(cd "$MOUNTPT" && pwd -P)
 dmg_cleanup() { hdiutil detach "$MOUNTPT" >/dev/null 2>&1 || true; rmdir "$MOUNTPT" 2>/dev/null || true; rm -f "$RWDMG"; }
 trap dmg_cleanup EXIT
 hdiutil attach "$RWDMG" -mountpoint "$MOUNTPT" -nobrowse >/dev/null
