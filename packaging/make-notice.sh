@@ -43,9 +43,10 @@ esac
   echo "Graphics driver: Mesa (Zink and KosmicKrisp, MIT license), built from a"
   echo "pinned upstream Mesa commit plus the patches under patches/mesa/ in the"
   echo "repository above. KosmicKrisp is developed by LunarG and Google within"
-  echo "upstream Mesa. The driver library contains LLVM 19 and the"
-  echo "SPIRV-LLVM-Translator (Apache-2.0 with LLVM exceptions, LICENSES/LLVM.txt),"
-  echo "SPIRV-Tools (Apache-2.0, LICENSES/Apache-2.0.txt) and zstd (BSD-3-Clause)."
+  echo "upstream Mesa. The driver library contains SPIRV-Tools (Apache-2.0,"
+  echo "LICENSES/Apache-2.0.txt) and zstd (BSD-3-Clause). LLVM, libclc and the"
+  echo "SPIRV-LLVM-Translator are used to build the driver; none of their code"
+  echo "is linked into it."
   echo
   echo "Libraries shipped beside the engine (Contents/Frameworks), each license"
   echo "text under LICENSES/:"

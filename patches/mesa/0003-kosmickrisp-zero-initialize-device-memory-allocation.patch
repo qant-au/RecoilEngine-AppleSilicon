@@ -1,37 +1,52 @@
 From 1a9e0a2ca7c2d30c9c483c92a14b36f32e4c9fdc Mon Sep 17 00:00:00 2001
 From: benbreen <8338320+benbreen@users.noreply.github.com>
 Date: Mon, 20 Jul 2026 21:35:03 +0100
-Subject: [PATCH 3/9] kosmickrisp: zero-initialize device memory allocations
+Subject: [PATCH 3/9] kosmickrisp: optionally zero-initialize device memory
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
 
-Fresh MTLHeap storage is recycled VRAM with undefined contents; drivers on
-other platforms effectively hand out zeroed kernel pages, so GL apps that
-(incorrectly but harmlessly) sample never-rendered FBO textures see
-transparent black there but psychedelic garbage here — e.g. BAR's
-AdvPlayersList after resign and its unit-info overlay (port issue #6).
-Unified memory makes the fix a one-time CPU memset through the
-heap-spanning buffer at allocation, before any resource can alias the heap.
+Fresh MTLHeap storage is recycled VRAM with undefined contents. Drivers on
+other platforms effectively hand out zeroed kernel pages, so a GL
+application that samples a texture it never rendered to sees transparent
+black there and leftover garbage here.
+
+With MESA_KK_ZERO_MEMORY=1 each allocation is cleared once with a CPU
+memset through the heap-spanning buffer, before any resource can alias
+the heap. It is off by default: the clear commits every page of every
+allocation, and it hides the application bug.
 ---
- src/kosmickrisp/vulkan/kk_bo.c | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ src/kosmickrisp/vulkan/kk_bo.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
 
 diff --git a/src/kosmickrisp/vulkan/kk_bo.c b/src/kosmickrisp/vulkan/kk_bo.c
-index 5562b61f1ec..519c9d87d15 100644
+index 5562b61f1ec..a46740c61c9 100644
 --- a/src/kosmickrisp/vulkan/kk_bo.c
 +++ b/src/kosmickrisp/vulkan/kk_bo.c
-@@ -65,6 +65,15 @@ kk_alloc_bo(struct kk_device *dev, struct vk_object_base *log_obj,
+@@ -11,6 +11,7 @@
+ 
+ #include "kosmickrisp/bridge/mtl_bridge.h"
+ 
++#include "util/u_debug.h"
+ #include "util/u_memory.h"
+ 
+ #if DETECT_OS_APPLE
+@@ -65,6 +66,20 @@ kk_alloc_bo(struct kk_device *dev, struct vk_object_base *log_obj,
     bo->gpu = mtl_buffer_get_gpu_address(map);
     bo->cpu = mtl_get_contents(map);
  
-+   /* Fresh MTLHeap storage is recycled VRAM with undefined contents. Zero it
-+    * (unified memory: plain CPU memset through the heap-spanning buffer, once
-+    * per allocation, before any resource can reference the heap) so
-+    * never-rendered resources — e.g. an FBO texture whose render pass failed
-+    * or has not run yet — read back as transparent black, matching drivers
-+    * that hand out zeroed pages, instead of leftover-VRAM garbage. */
-+   if (bo->cpu != NULL)
++   /* Fresh MTLHeap storage is recycled VRAM with undefined contents. With
++    * MESA_KK_ZERO_MEMORY=1, zero it (unified memory: a plain CPU memset
++    * through the heap-spanning buffer, once per allocation, before any
++    * resource can reference the heap), so a resource that is read before it
++    * was ever written, such as an FBO texture whose render pass has not run
++    * yet, reads back as transparent black, as on drivers that hand out zeroed
++    * pages. Off by default: it writes every page of every allocation, and it
++    * hides exactly the application bug it works around. */
++   static int zero_memory = -1;
++   if (zero_memory < 0)
++      zero_memory = debug_get_bool_option("MESA_KK_ZERO_MEMORY", false) ? 1 : 0;
++   if (zero_memory && bo->cpu != NULL)
 +      memset(bo->cpu, 0, size_B);
 +
     kk_device_add_heap_to_residency_set(dev, handle);

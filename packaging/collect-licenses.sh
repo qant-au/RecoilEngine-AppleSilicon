@@ -62,14 +62,9 @@ if ls "${BUNDLE_FRAMEWORKS:-/nonexistent}"/libcurl* >/dev/null 2>&1; then
   grab curl.txt             "$(brewdir curl)/COPYING" "/usr/share/curl/COPYING"
 fi
 
-# LLVM and the SPIRV-LLVM-Translator are linked into the driver library
-# (scripts/build-mesa-kk.sh builds against Homebrew's llvm@19; the libclc source
-# pinned by scripts/build-libclc.sh carries the same LLVM project licence).
-{
-  section "LLVM 19 (Apache-2.0 with LLVM exceptions)" \
-    "$(brewdir llvm@19)/LICENSE.TXT" "$(ls "$BAR"/deps/libclc-*.src/LICENSE.TXT 2>/dev/null | tail -1)"
-  section "SPIRV-LLVM-Translator" "$BAR/deps/spirv-xlat/LICENSE.TXT"
-} > "$DEST/LLVM.txt"
+# LLVM, libclc and the SPIRV-LLVM-Translator are build tools for the driver
+# only: scripts/build-mesa-kk.sh fails if LLVM code is linked into it, so no
+# text of theirs ships.
 
 # MIT collection: mesa + vendored MIT components, concatenated with headers
 {

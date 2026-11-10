@@ -184,7 +184,9 @@ INI
 
 source "$DEPS/mesa-venv/bin/activate"
 export PATH="$L19/bin:$DEPS/mesa-venv/bin:/opt/homebrew/opt/bison/bin:/opt/homebrew/opt/flex/bin:$PATH"
-export LIBRARY_PATH="/opt/homebrew/lib"
+# No LIBRARY_PATH: every library the driver links is named by an explicit
+# path (driver-deps, the translator, llvm@19's static archives), so nothing
+# under Homebrew's lib folder can be picked up by a bare -l.
 # Mesa compiles its *install prefix* into the driver (SYSCONFDIR/DATADIR, used
 # to locate drirc at runtime). The -ffile-prefix-map/-fdebug-prefix-map flags
 # set above remap SOURCE paths only and do not touch it, so building straight
@@ -205,7 +207,7 @@ meson setup build-native --native-file "$DEPS/plain-native.ini" \
   -Degl-native-platform=surfaceless -Degl=enabled -Dglx=disabled \
   -Dgallium-drivers=zink -Dvulkan-drivers=kosmickrisp \
   -Dmoltenvk-dir=/opt/homebrew/opt/molten-vk \
-  -Dllvm=enabled -Dshared-llvm=disabled -Dbuildtype=release \
+  -Dllvm=enabled -Dshared-llvm=disabled -Ddraw-use-llvm=false -Dbuildtype=release \
   -Dprefer_static=true  # take driver-deps' static zstd/SPIRV-Tools, never a Homebrew dylib
 DESTDIR="$STAGE" ninja -C build-native install
 
@@ -235,6 +237,30 @@ for d in "$MESA_PREFIX"/lib/*.dylib; do
   done
 done
 echo "install names repointed from $NEUTRAL_PREFIX to $MESA_PREFIX"
+
+# The driver may load only system libraries, its own siblings and the loader
+# from driver-deps. A dependency under a package manager's prefix would be
+# missing on a player's Mac, or worse, copied into the bundle unnoticed.
+foreign=0
+for d in "$MESA_PREFIX"/lib/*.dylib; do
+  [ -L "$d" ] && continue
+  bad=$(otool -L "$d" | tail -n +2 | awk '{print $1}' | grep -E '^(/opt/homebrew|/usr/local|/opt/local)/' || true)
+  [ -z "$bad" ] || { echo "FATAL: $(basename "$d") depends on $bad"; foreign=1; }
+done
+[ "$foreign" = "0" ] || exit 1
+echo "driver dependency check: nothing under a package manager's prefix"
+
+# LLVM comes from Homebrew and is a build tool here (the shader precompiler).
+# -Ddraw-use-llvm=false keeps it out of the driver itself. If a Mesa change
+# links it in again, the bundle's NOTICE and license texts would no longer
+# cover what ships, so stop.
+for d in "$MESA_PREFIX"/lib/*.dylib; do
+  [ -L "$d" ] && continue
+  if nm "$d" 2>/dev/null | grep -q -E '_ZNK?4llvm|_ZNK?5SPIRV|_LLVM[A-Z]'; then
+    echo "FATAL: $(basename "$d") contains LLVM code; the shipped notices do not cover it"; exit 1
+  fi
+done
+echo "driver content check: no LLVM code linked in"
 
 # The ICD json's library_path is absolute and now names the neutral prefix,
 # which does not exist. Repoint it at the real install location so non-bundled

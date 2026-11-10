@@ -330,6 +330,13 @@ bool CreateContext(SDL_Window* window)
 	// zero semantics as safe (upstream bdc3a6afe1a), which is what the old
 	// KK_MATH_MODE=fast knob (our dropped patch 0012) approximated. Nothing to set.
 
+	// The driver clears each new memory allocation when MESA_KK_ZERO_MEMORY=1
+	// (patches/mesa/0003). Games written against other drivers sample textures
+	// they have not rendered to yet and expect transparent black there, so it
+	// is on unless the environment says otherwise: MESA_KK_ZERO_MEMORY=0 turns
+	// it off, to find such reads or to measure what the clear costs.
+	setenv("MESA_KK_ZERO_MEMORY", "1", 0);
+
 	MAC_DLOG("[EGL] eglGetDisplay(EGL_DEFAULT_DISPLAY)...\n");
 	eglDpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
 	MAC_DLOG("[EGL] eglGetDisplay -> %p (lastError=0x%x)\n", (void*)eglDpy, eglGetError());
