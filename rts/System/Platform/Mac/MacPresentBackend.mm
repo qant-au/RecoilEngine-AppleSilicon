@@ -1106,6 +1106,12 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 	// on (/debug, or SPRING_HITCH_LOG), and let a [hitch] line say whether a
 	// slow swap was the pack, the GPU-behind wait, or the Metal present.
 	const int cur = (int)(dpFrame % DP_RING);
+	// The check after the pack must see only the pack's own error: empty the
+	// queue first, or an error left by this frame's engine or Lua drawing would
+	// be taken for a failed pack and switch direct present off for the session.
+	if (dpFrame < 100) {
+		for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
+	}
 	{
 		SCOPED_TIMER("Misc::SwapBuffers::MacPack");
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
