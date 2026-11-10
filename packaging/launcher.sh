@@ -32,7 +32,7 @@ fail_dialog() { # osascript shows its own dialog: no other app is addressed,
   # so no Automation permission is involved. The text is passed as an
   # argument, never spliced into the script, so a quote or backslash in a
   # path or an error line cannot break it. "activate" brings it to the front.
-  /usr/bin/osascript -e 'on run argv' -e 'activate' \
+  osascript -e 'on run argv' -e 'activate' \
     -e 'display dialog (item 1 of argv) buttons {"OK"} default button 1 with title "Accurona" with icon caution' \
     -e 'end run' "$1" >/dev/null 2>&1 || true
 }
