@@ -7,7 +7,8 @@
 set -uo pipefail
 BAR="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/sl-bridge-test.XXXXXX")
-trap 'kill $BPID $HOLDER ${DISCORD:-} 2>/dev/null; rm -rf "$WORK" "${DTMP:-}"' EXIT
+WD2="$WORK/wd2"   # write dir of the second bridge (the StartNewSpring and UploadLog cases)
+trap 'kill $BPID $HOLDER ${DISCORD:-} ${B2PID:-} $(cat "$WD2/engine-starts" 2>/dev/null) 2>/dev/null; rm -rf "$WORK" "${DTMP:-}"' EXIT
 PASS=0; FAIL=0
 ok(){ echo "  ok   $*"; PASS=$((PASS+1)); }; no(){ echo "  FAIL $*"; FAIL=$((FAIL+1)); }
 
@@ -143,6 +144,49 @@ R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"demos/bad.sdfz"}}'
 kill -0 "$BPID" 2>/dev/null && grep -q 'bad demo header: demos/bad.sdfz' "$WORK/bridge.log" \
   && ok "malformed replay rejected, bridge still running" || no "malformed replay: $R"
 
+# The demo is read as a stream: the script is kept, the demo stream is read
+# past to reach the winners behind it, and sizes no real demo has are refused.
+cat > "$WORK/demos.py" <<'PY'
+import gzip, struct, sys
+SCRIPT = b'[game]\n{\n\tmapname=Fixture Map;\n\tgametype=Fixture Game;\n}\n'
+def demo(name, stream=0, winners=b'', claim_script=None, claim_stream=None):
+    h = bytearray(352); h[0:15] = b'spring demofile'
+    struct.pack_into('<i', h, 20, 352)                                       # headerSize
+    struct.pack_into('<i', h, 304, len(SCRIPT) if claim_script is None else claim_script)
+    struct.pack_into('<i', h, 308, stream if claim_stream is None else claim_stream)
+    struct.pack_into('<i', h, 312, 77)                                       # gameTime
+    struct.pack_into('<i', h, 348, len(winners))
+    zeros = bytes(1 << 20)
+    with gzip.open(sys.argv[1] + '/' + name, 'wb', compresslevel=1) as f:
+        f.write(bytes(h) + SCRIPT)
+        for _ in range(stream >> 20): f.write(zeros)
+        f.write(zeros[:stream & 0xFFFFF] + winners)
+demo('small.sdfz', stream=1000, winners=b'\x01')
+demo('bigscript.sdfz', claim_script=64 << 20)             # a 64 MB start script
+demo('farwinners.sdfz', claim_stream=1 << 30, winners=b'\x01')   # winners 1 GB in
+demo('bomb.sdfz', stream=300 << 20, winners=b'\x02')      # 300 MB once decompressed
+PY
+python3 "$WORK/demos.py" "$WD/demos"
+replay(){ # replay <name> <python expression over c, the ReplayInfo for that demo>
+  python3 -c "
+import json,sys
+c=[m['command'] for m in map(json.loads, filter(str.strip, sys.stdin)) if m['name']=='ReplayInfo' and m['command']['relativePath']=='demos/$1']
+assert len(c)==1, c
+c=c[0]; assert $2, c"
+}
+R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"demos/small.sdfz"}}' \
+         '{"name":"ReadReplayInfo","command":{"relativePath":"demos/bigscript.sdfz"}}' \
+         '{"name":"ReadReplayInfo","command":{"relativePath":"demos/farwinners.sdfz"}}')
+echo "$R" | replay small.sdfz "c['map']=='Fixture Map' and c['game']=='Fixture Game' and c['gameTime']==77 and c['winningAllyTeamIds']==[1]" 2>/dev/null \
+  && ok "replay read as a stream: script parsed, winners found behind the demo stream" || no "streamed replay: $R"
+! echo "$R" | grep -q 'bigscript' && grep -q 'bad demo header: demos/bigscript.sdfz' "$WORK/bridge.log" \
+  && ok "replay claiming an oversized script refused" || no "oversized script: $R"
+echo "$R" | replay farwinners.sdfz "c['map']=='Fixture Map' and c['winningAllyTeamIds']==[]" 2>/dev/null \
+  && ok "winners beyond the read limit: replay listed without them" || no "far winners: $R"
+R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"demos/bomb.sdfz"}}')
+echo "$R" | replay bomb.sdfz "c['winningAllyTeamIds']==[2]" 2>/dev/null \
+  && ok "300 MB replay read through to its winners" || no "large replay: $R"
+
 # Only the engine may connect: the same command sent by another program (nc) is
 # refused before a byte of it is read.
 PORT=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['_sl_port'])" "$WD/sl-connection.json")
@@ -211,7 +255,38 @@ im=Image.open(sys.argv[1]).convert('RGB'); assert im.size==(1024,1024), im.size
 r,g,b=im.getpixel((512,512)); assert r>240 and g<20 and b<20, (r,g,b)
 " "$WD/LuaMenu/Images/Minimaps/fixture.jpg" 2>/dev/null && ok "minimap decoded: 1024x1024, the map's own colour" || no "minimap image wrong or missing"
 R=$(send '{"name":"ParseMiniMap","command":{"mapPath":"/etc/hosts","destination":"x.jpg"}}')
-echo "$R" | grep -q '"ParseMiniMapFinished"' && [ ! -f "$WD/x.jpg" ] && ok "ParseMiniMap on a non-map: finished, no image" || no "ParseMiniMap non-map: $R"
+[ -z "$R" ] && [ ! -f "$WD/x.jpg" ] && grep -q 'ParseMiniMap hosts: failed' "$WORK/bridge.log" \
+  && ok "ParseMiniMap on a non-map: no image, so no ParseMiniMapFinished" || no "ParseMiniMap non-map: $R"
+# The minimap pointer comes from the map file. "deep" has its minimap 5 MB in
+# (blue, behind white filler): found by reading past the filler. "far" points
+# near 2 GB and "short" past the end of its .smf: no picture and no reply.
+for spec in deep:5242880 far:2147483000 short:1048576; do
+  n=${spec%%:*}
+  mkdir -p "$WORK/map-$n/maps"
+  python3 -c "
+import struct,sys
+ptr=int(sys.argv[2])
+hdr=bytearray(80); hdr[0:16]=b'spring map file\\0'
+struct.pack_into('<i',hdr,64,ptr)
+body=b'\\xff'*4096
+if sys.argv[3]=='deep': body=b'\\xff'*(ptr-80)+struct.pack('<HHI',0x001F,0x001F,0)*(256*256)
+open(sys.argv[1],'wb').write(bytes(hdr)+body)
+" "$WORK/map-$n/maps/$n.smf" "${spec##*:}" "$n"
+  (cd "$WORK/map-$n" && /usr/bin/zip -q -r "$WD/maps/$n.sdz" maps)
+done
+R=$(send "{\"name\":\"ParseMiniMap\",\"command\":{\"mapPath\":\"$WD/maps/deep.sdz\",\"destination\":\"deep.png\"}}" \
+         "{\"name\":\"ParseMiniMap\",\"command\":{\"mapPath\":\"$WD/maps/far.sdz\",\"destination\":\"far.png\"}}" \
+         "{\"name\":\"ParseMiniMap\",\"command\":{\"mapPath\":\"$WD/maps/short.sdz\",\"destination\":\"short.png\"}}")
+python3 -c "
+from PIL import Image; import sys
+im=Image.open(sys.argv[1]).convert('RGB'); assert im.size==(1024,1024), im.size
+for xy in ((0,0),(512,512),(1023,1023)):
+    r,g,b=im.getpixel(xy); assert r<20 and g<20 and b>240, (xy,r,g,b)
+" "$WD/deep.png" 2>/dev/null && ok "minimap 5 MB into the map found" || no "deep minimap wrong or missing: $R"
+[ "$(echo "$R" | grep -c '"ParseMiniMapFinished"')" = 1 ] && [ ! -f "$WD/far.png" ] && grep -q 'minimap missing in maps/far.smf' "$WORK/bridge.log" \
+  && ok "minimap pointer near 2 GB refused, no reply" || no "far minimap pointer: $R"
+[ ! -f "$WD/short.png" ] && grep -q 'minimap missing in maps/short.smf' "$WORK/bridge.log" && kill -0 "$BPID" 2>/dev/null \
+  && ok "minimap pointer past the end of the map refused, bridge still running" || no "short minimap: $R"
 R=$(send '{"name":"ParseMiniMap","command":{"mapPath":"x.sdz","destination":"../../escape.jpg"}}')
 [ -z "$R" ] && ok "ParseMiniMap destination outside write dir refused" || no "ParseMiniMap traversal: $R"
 
@@ -229,6 +304,97 @@ assert a['assets']['large_image']=='https://maps.example/Glacial%20Gap.jpg', a['
 assert a['party']=={'id':'42','size':[2,16]}, a['party']
 assert a['buttons'][0]['url']=='https://www.beyondallreason.info/', a['buttons']
 " "$WORK/discord.json" 2>/dev/null && ok "Discord: handshake with the app id, SET_ACTIVITY with the lobby's fields" || no "Discord activity wrong or missing ($(cat "$WORK/discord.json" 2>/dev/null | head -c 300))"
+
+# A client that never ends its line is dropped once 1 MB is pending.
+cat > "$WORK/noline.py" <<'PY'
+import json, socket, sys
+c = json.load(open(sys.argv[1]))
+s = socket.create_connection((c["_sl_address"], c["_sl_port"]), timeout=5)
+closed = False
+try:
+    for _ in range(32):
+        s.sendall(b"a" * 65536)           # 2 MB in all, no newline
+    closed = s.recv(1) == b""
+except (BrokenPipeError, ConnectionResetError):
+    closed = True
+except Exception:
+    closed = False
+sys.exit(0 if closed else 1)
+PY
+python3 "$WORK/noline.py" "$WD/sl-connection.json" && grep -q 'line over 1 MB' "$WORK/bridge.log" && kill -0 "$BPID" 2>/dev/null \
+  && ok "2 MB without a newline: connection dropped, bridge still running" || no "an endless line was not dropped"
+
+# Nothing above (a 300 MB replay, the map pointers, the endless line) may have
+# been held in memory: the bridge's lifetime peak footprint (proc_pid_rusage)
+# stays small. Skipped where the system does not report it.
+PEAK=$(python3 -c "
+import ctypes, struct, sys
+b = ctypes.create_string_buffer(1024)
+if ctypes.CDLL('/usr/lib/libproc.dylib').proc_pid_rusage(int(sys.argv[1]), 4, b) == 0:
+    print(struct.unpack_from('<Q', b.raw, 240)[0] >> 20)" "$BPID" 2>/dev/null)
+if [ -n "$PEAK" ]; then
+  [ "$PEAK" -lt 150 ] && ok "bridge peak memory ${PEAK} MB: oversized inputs were not held in memory" || no "bridge peak memory ${PEAK} MB"
+else
+  echo "  skip peak memory check (not reported on this system)"
+fi
+
+# A second bridge whose engine is a small program of our own, so that what
+# StartNewSpring starts stays up and can be counted. Started with --write-dir
+# it records its pid and waits; otherwise it is the lobby client (the bridge
+# only talks to its engine binary). This bridge has online play on and a log
+# address nothing listens at, so UploadLog gets as far as packing the logs.
+cat > "$WORK/engine.c" <<'C'
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+int main(int argc, char **argv) {
+    if (argc > 2 && strcmp(argv[1], "--write-dir") == 0) {
+        char path[4096];
+        snprintf(path, sizeof path, "%s/engine-starts", argv[2]);
+        FILE *f = fopen(path, "a");
+        if (f) { fprintf(f, "%d\n", (int)getpid()); fclose(f); }
+        sleep(120);
+        return 0;
+    }
+    if (argc < 2) return 2;
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET; a.sin_port = htons(atoi(argv[1])); a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(s, (struct sockaddr *)&a, sizeof a) != 0) return 1;
+    for (int i = 2; i < argc; i++) { write(s, argv[i], strlen(argv[i])); write(s, "\n", 1); }
+    struct timeval tv = {3, 0};
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    char buf[65536]; ssize_t n;
+    while ((n = read(s, buf, sizeof buf)) > 0) fwrite(buf, 1, (size_t)n, stdout);
+    return 0;
+}
+C
+cc -o "$WORK/engine" "$WORK/engine.c" 2>/dev/null || { echo "FATAL: the stand-in engine did not compile"; exit 1; }
+mkdir -p "$WD2"
+echo "log" > "$WD2/infolog.txt"; echo "log" > "$WD2/-T.log"     # zip would read -T.log as options
+printf '%s' '{"log_upload_url":"https://127.0.0.1:1"}' > "$WORK/extras2.json"
+"$WORK/sl-bridge" --writedir "$WD2" --prd /usr/bin/false --engine "$WORK/engine" \
+  --engine-version 2026.07.04 --config "$WORK/extras2.json" --online 1 \
+  --parent-pid "$HOLDER" --log "$WORK/bridge2.log" > "$WORK/out2" &
+B2PID=$!
+for _ in $(seq 50); do grep -q SL_BRIDGE_READY "$WORK/out2" 2>/dev/null && break; sleep 0.1; done
+PORT2=$(sed -n 's/^SL_BRIDGE_READY //p' "$WORK/out2")
+START='{"name":"StartNewSpring","command":{"Engine":"2026.07.04","StartDemoName":"demos/x.sdfz"}}'
+"$WORK/engine" "$PORT2" "$START" "$START" "$START" > /dev/null
+[ "$(wc -l < "$WD2/engine-starts" | tr -d ' ')" = 1 ] && [ "$(grep -c 'StartNewSpring ignored' "$WORK/bridge2.log")" = 2 ] \
+  && ok "StartNewSpring three times: one engine started, the rest ignored while it runs" || no "StartNewSpring started $(cat "$WD2/engine-starts" 2>/dev/null | wc -l | tr -d ' ') engines"
+kill "$(head -1 "$WD2/engine-starts")" 2>/dev/null; sleep 0.5
+"$WORK/engine" "$PORT2" "$START" > /dev/null
+[ "$(wc -l < "$WD2/engine-starts" | tr -d ' ')" = 2 ] && ok "StartNewSpring works again once that engine has exited" || no "StartNewSpring stayed off after the engine exited"
+
+R=$("$WORK/engine" "$PORT2" '{"name":"UploadLog","command":{}}')
+echo "$R" | grep -q 'did not accept the upload' && ! echo "$R" | grep -q 'Could not pack' \
+  && ok "UploadLog packs a log whose name starts with a dash" || no "UploadLog with a dash-named log: $R"
 
 kill "$HOLDER"; wait "$HOLDER" 2>/dev/null
 for _ in $(seq 40); do kill -0 "$BPID" 2>/dev/null || break; sleep 0.25; done

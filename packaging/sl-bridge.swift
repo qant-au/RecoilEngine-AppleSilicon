@@ -26,8 +26,10 @@
 //                                      only when Engine matches it (another engine
 //                                      version cannot run on this Mac); same-engine
 //                                      replays never come here (the lobby restarts
-//                                      the running engine itself)
-//   ParseMiniMap {mapPath,destination} -> ParseMiniMapFinished; the map's own
+//                                      the running engine itself); ignored while an
+//                                      engine it started is still running
+//   ParseMiniMap {mapPath,destination} -> ParseMiniMapFinished (only when the
+//                                      picture was written); the map's own
 //                                      1024x1024 minimap (DXT1 in the .smf), read with
 //                                      the system bsdtar (7z and zip) and written as a
 //                                      JPEG/PNG inside the write dir, as spring-launcher's
@@ -186,17 +188,75 @@ final class Client {
 var clients: [ObjectIdentifier: Client] = [:]
 func broadcast(_ name: String, _ command: [String: Any]) { for c in clients.values { c.send(name, command) } }
 
-// ---- demo (.sdfz) parsing ----------------------------------------------------
-func gunzip(_ url: URL) -> Data? {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
-    p.arguments = ["-dc", url.path]
-    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { return nil }
-    let d = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()
-    return p.terminationStatus == 0 ? d : nil
+// ---- bounded reads from a helper process --------------------------------------
+// gzip and bsdtar unpack files whose real size is chosen by whoever made them.
+// Their output is read as a stream: only the bytes asked for are kept, the
+// rest is read past and dropped, so memory use does not follow the file.
+final class ProcessStream {
+    private let process: Process
+    private let pipe: Pipe
+    private var pending = Data()
+    private var chunk = [UInt8](repeating: 0, count: 1 << 16)
+
+    init?(_ exe: String, _ args: [String]) {
+        let p = Process(), out = Pipe()
+        p.executableURL = URL(fileURLWithPath: exe); p.arguments = args
+        p.standardOutput = out; p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return nil }
+        process = p; pipe = out
+    }
+    /// Reads one piece into `chunk`; 0 at the end of the stream.
+    private func fill() -> Int {
+        let fd = pipe.fileHandleForReading.fileDescriptor
+        while true {
+            let n = chunk.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+            if n >= 0 { return n }
+            if errno != EINTR { return 0 }
+        }
+    }
+    /// The next `max` bytes, or fewer when the stream ends first.
+    func readUpTo(_ max: Int) -> Data {
+        while pending.count < max {
+            let got = fill()
+            if got == 0 { break }
+            pending.append(contentsOf: chunk[0..<got])
+        }
+        let d = Data(pending.prefix(max))
+        pending = Data(pending.dropFirst(d.count))
+        return d
+    }
+    /// Exactly `n` bytes, or nil when the stream ends first.
+    func read(_ n: Int) -> Data? {
+        let d = readUpTo(n)
+        return d.count == n ? d : nil
+    }
+    /// Reads past `n` bytes without keeping them; false when the stream ends first.
+    func skip(_ n: Int) -> Bool {
+        let have = min(n, pending.count)
+        pending = Data(pending.dropFirst(have))
+        var left = n - have
+        while left > 0 {
+            let got = fill()
+            if got == 0 { return false }
+            if got > left { pending.append(contentsOf: chunk[left..<got]); left = 0 } else { left -= got }
+        }
+        return true
+    }
+    /// Stops the helper; whatever it had left to say is not read.
+    func close() {
+        if process.isRunning { process.terminate() }
+        process.waitUntilExit()
+    }
 }
+
+// ---- demo (.sdfz) parsing ----------------------------------------------------
+// DemoFileHeader is 352 bytes. A start script is tens of kilobytes even with
+// every option set, so a header that claims megabytes is not a demo. The demo
+// stream is read past only to reach the winners list behind it, and only when
+// the header puts that list within DEMO_READ_MAX of decompressed data.
+let DEMO_HEADER_BYTES = 352
+let DEMO_SCRIPT_MAX = 2 << 20
+let DEMO_READ_MAX = 512 << 20
 
 func i32(_ d: Data, _ o: Int) -> Int {
     guard o + 4 <= d.count else { return 0 }
@@ -240,7 +300,11 @@ func replayInfo(relativePath: String) -> [String: Any]? {
        (c["replayCacheVersion"] as? Int) == 2, (c["relativePath"] as? String) == relativePath {
         return c
     }
-    guard let d = gunzip(url), d.count > 360,
+    guard let z = ProcessStream("/usr/bin/gzip", ["-dc", url.path]) else {
+        log("ReadReplayInfo: cannot read: \(relativePath)"); return nil
+    }
+    defer { z.close() }
+    guard let d = z.read(DEMO_HEADER_BYTES),
           String(decoding: d.prefix(15), as: UTF8.self) == "spring demofile" else {
         log("ReadReplayInfo: not a demo: \(relativePath)"); return nil
     }
@@ -252,16 +316,19 @@ func replayInfo(relativePath: String) -> [String: Any]? {
     // unixTime 296 (u64), scriptSize 304, demoStreamSize 308, gameTime 312, ...,
     // winningAllyTeamsSize 348 (header is 352 bytes)
     let winSize = i32(d, 348)
-    // every size comes from the file: a negative one would put the slices below
-    // out of range, so such a file is simply not a demo
-    guard headerSize > 0, scriptSize >= 0, streamSize >= 0, winSize >= 0,
-          headerSize + scriptSize <= d.count else {
+    // every size comes from the file: one that is negative, or larger than any
+    // real demo has, means the file is simply not a demo
+    guard headerSize >= DEMO_HEADER_BYTES, scriptSize >= 0, streamSize >= 0, winSize >= 0,
+          headerSize + scriptSize <= DEMO_SCRIPT_MAX,
+          z.skip(headerSize - DEMO_HEADER_BYTES), let scriptData = z.read(scriptSize) else {
         log("ReadReplayInfo: bad demo header: \(relativePath)"); return nil
     }
-    let script = String(decoding: d.subdata(in: headerSize..<headerSize+scriptSize), as: UTF8.self)
+    let script = String(decoding: scriptData, as: UTF8.self)
+    // one byte per winning ally team, after the whole demo stream; a file that
+    // puts the list beyond the read limit is listed without its winners
     var winners: [Int] = []
-    let wOff = headerSize + scriptSize + streamSize
-    if winSize > 0, wOff + winSize <= d.count { winners = d.subdata(in: wOff..<wOff+winSize).map { Int($0) } }
+    if winSize > 0, winSize <= 256, headerSize + scriptSize + streamSize + winSize <= DEMO_READ_MAX,
+       z.skip(streamSize), let w = z.read(winSize) { winners = w.map { Int($0) } }
 
     let s = parseScript(script)
     let game = s["game"] ?? [:]
@@ -415,40 +482,24 @@ func startNextDownload() {
 // A map archive (.sd7 = 7z, .sdz = zip) holds maps/<name>.smf, whose header
 // points at a 1024x1024 DXT1 minimap (rts/Map/SMF/SMFFormat.h: minimapPtr is the
 // 14th int32, byte 64). bsdtar (libarchive, part of macOS) reads both formats;
-// only the start of the .smf is streamed, up to the end of the minimap.
+// only the start of the .smf is streamed, up to the end of the minimap, and
+// only the header and the minimap itself are kept.
 let minimapQueue = DispatchQueue(label: "sl-bridge.minimap")
 let MINIMAP_SIDE = 1024
 let MINIMAP_BYTES = MINIMAP_SIDE * MINIMAP_SIDE / 2
+let SMF_HEADER_BYTES = 80
+// The minimap sits behind the height and type maps, a few tens of megabytes
+// into the .smf of the largest maps. A pointer far beyond that is not a real
+// map's, and reading up to it would only burn time.
+let MINIMAP_PTR_MAX = 256 << 20
+// A map archive lists a few hundred files at most.
+let ARCHIVE_LISTING_MAX = 4 << 20
 
 func smfEntry(in archive: String) -> String? {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: "/usr/bin/bsdtar")
-    p.arguments = ["-tf", archive]
-    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { return nil }
-    let d = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()
-    return String(decoding: d, as: UTF8.self).split(separator: "\n").map(String.init)
+    guard let z = ProcessStream("/usr/bin/bsdtar", ["-tf", archive]) else { return nil }
+    defer { z.close() }
+    return String(decoding: z.readUpTo(ARCHIVE_LISTING_MAX), as: UTF8.self).split(separator: "\n").map(String.init)
         .first { $0.lowercased().hasPrefix("maps/") && $0.lowercased().hasSuffix(".smf") }
-}
-
-/// The first `upTo` bytes of one archive entry (or fewer at end of entry).
-func entryPrefix(archive: String, entry: String, upTo: Int) -> Data? {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: "/usr/bin/bsdtar")
-    p.arguments = ["-xOf", archive, entry]
-    let out = Pipe(); p.standardOutput = out; p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { return nil }
-    var d = Data()
-    let h = out.fileHandleForReading
-    while d.count < upTo {
-        let chunk = h.availableData
-        if chunk.isEmpty { break }
-        d.append(chunk)
-    }
-    if p.isRunning { p.terminate() }
-    p.waitUntilExit()
-    return d
 }
 
 func decodeDXT1(_ src: Data, side: Int) -> [UInt8] {
@@ -506,16 +557,23 @@ func parseMiniMap(mapPath: String, dest: URL) -> Bool {
         log("ParseMiniMap: not a map archive: \(mapPath)"); return false
     }
     guard let entry = smfEntry(in: mapPath) else { log("ParseMiniMap: no maps/*.smf in \(mapPath)"); return false }
-    guard let head = entryPrefix(archive: mapPath, entry: entry, upTo: 80), head.count >= 68,
+    // "--": the entry name comes from the archive and must never read as an option
+    guard let z = ProcessStream("/usr/bin/bsdtar", ["-xOf", mapPath, "--", entry]) else {
+        log("ParseMiniMap: cannot read \(mapPath)"); return false
+    }
+    defer { z.close() }
+    guard let head = z.read(SMF_HEADER_BYTES),
           String(decoding: head.prefix(15), as: UTF8.self) == "spring map file" else {
         log("ParseMiniMap: not an SMF: \(entry)"); return false
     }
+    // the pointer comes from the file: it must lie after the header, within the
+    // limit, and the entry must really hold a whole minimap there
     let ptr = i32(head, 64)
-    guard ptr > 0, let d = entryPrefix(archive: mapPath, entry: entry, upTo: ptr + MINIMAP_BYTES),
-          d.count >= ptr + MINIMAP_BYTES else {
+    guard ptr >= SMF_HEADER_BYTES, ptr <= MINIMAP_PTR_MAX,
+          z.skip(ptr - SMF_HEADER_BYTES), let dxt = z.read(MINIMAP_BYTES) else {
         log("ParseMiniMap: minimap missing in \(entry)"); return false
     }
-    let rgba = decodeDXT1(d.subdata(in: ptr..<ptr + MINIMAP_BYTES), side: MINIMAP_SIDE)
+    let rgba = decodeDXT1(dxt, side: MINIMAP_SIDE)
     return writeImage(rgba, side: MINIMAP_SIDE, to: dest)
 }
 
@@ -548,7 +606,8 @@ func uploadLog(reply: @escaping (String, [String: Any]) -> Void) {
     let z = Process()
     z.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
     z.currentDirectoryURL = writeDir
-    z.arguments = ["-q", zipURL.path] + files
+    // "./": a file whose name starts with "-" must not read as an option to zip
+    z.arguments = ["-q", zipURL.path] + files.map { "./" + $0 }
     do { try z.run(); z.waitUntilExit() } catch {}
     guard z.terminationStatus == 0, let body = try? Data(contentsOf: zipURL) else {
         reply("UploadLogFailed", ["msg": "Could not pack the logs."]); return
@@ -671,6 +730,12 @@ func discordSetActivity(_ cmd: [String: Any]) {
 }
 
 // ---- command dispatch --------------------------------------------------------
+// What StartNewSpring last started: an engine on a replay, or the notice that
+// the replay needs another engine. A repeat while that one is still up is
+// ignored, so a stream of messages cannot pile up engines or dialogs.
+var startedEngine: Process?
+var engineNotice: Process?
+
 func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
     switch name {
     case "ReadReplayInfo":
@@ -731,6 +796,7 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
         guard let demo = (cmd["StartDemoName"] as? String).flatMap(insideWriteDir) else { return }
         if !engineVersion.isEmpty && eng.lowercased().hasPrefix(engineVersion.lowercased()) == false {
             log("StartNewSpring refused: demo engine \(eng) != bundled \(engineVersion)")
+            if engineNotice?.isRunning == true { return }
             // say why, instead of the replay silently doing nothing (Vandomas issue #21)
             let msg = "This replay was recorded on engine \(eng.isEmpty ? "(unknown)" : eng). Accurona can only play replays recorded on engine \(engineVersion)."
             // passed as an argv item, not spliced into the script: no quoting issues
@@ -738,12 +804,15 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
             p.arguments = ["-e", "on run argv",
                            "-e", "display dialog (item 1 of argv) buttons {\"OK\"} default button 1 with title \"Accurona\" with icon note",
                            "-e", "end run", msg]
-            try? p.run()
+            if (try? p.run()) != nil { engineNotice = p }
             return
+        }
+        if startedEngine?.isRunning == true {
+            log("StartNewSpring ignored: the engine it started is still running"); return
         }
         let p = Process(); p.executableURL = URL(fileURLWithPath: enginePath)
         p.arguments = ["--write-dir", writeDir.path, demo.path]
-        do { try p.run(); log("StartNewSpring: \(demo.lastPathComponent)") } catch { log("StartNewSpring failed: \(error)") }
+        do { try p.run(); startedEngine = p; log("StartNewSpring: \(demo.lastPathComponent)") } catch { log("StartNewSpring failed: \(error)") }
     case "ParseMiniMap":
         // one at a time, off the connection queue (as spring-launcher serialises them)
         let mapPath = cmd["mapPath"] as? String ?? ""
@@ -753,7 +822,9 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
         minimapQueue.async {
             let ok = parseMiniMap(mapPath: mapPath, dest: dest)
             log("ParseMiniMap \((mapPath as NSString).lastPathComponent): \(ok ? "ok" : "failed")")
-            queue.async { client.send("ParseMiniMapFinished", ["mapPath": mapPath, "destinationPath": dest.path]) }
+            // the lobby loads the picture when it hears this, so it is said only
+            // when there is one
+            if ok { queue.async { client.send("ParseMiniMapFinished", ["mapPath": mapPath, "destinationPath": dest.path]) } }
         }
     case "UploadLog":
         DispatchQueue.global().async {
