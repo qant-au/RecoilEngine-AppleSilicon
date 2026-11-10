@@ -1019,8 +1019,12 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 	// A present of this slot that is still on its way to the screen must not
 	// have its pixels replaced under it. That only happens while the display
 	// takes no frames (hidden window, display change): skip this frame.
-	if (MacMetalPresent_PixelBufferBusy(dpMap[cur]))
+	if (MacMetalPresent_PixelBufferBusy(dpMap[cur])) {
+		// still submit this frame's drawing: the pack below is what normally
+		// flushes, and without it the GPU would get several frames at once
+		glFlush();
 		return true;
+	}
 	// The check after the pack must see only the pack's own error: empty the
 	// queue first, or an error left by this frame's engine or Lua drawing would
 	// be taken for a failed pack and switch direct present off for the session.
