@@ -86,7 +86,15 @@
 
 CONFIG(bool, LuaShaders).defaultValue(true).headlessValue(false).safemodeValue(false);
 CONFIG(int, DeprecatedGLWarnLevel).defaultValue(0).headlessValue(0).safemodeValue(0);
-CONFIG(bool, LuaImmediateModeBuffering).defaultValue(true).description("Draw each gl.BeginEnd block with one glDrawArrays instead of one glVertex call per vertex. 0 restores glBegin/glEnd.");
+// On by default only on macOS, where the GL driver sits on a translation stack
+// that makes one call per vertex expensive. Other platforms keep the engine's
+// plain glBegin/glEnd unless the setting is turned on.
+#ifdef __APPLE__
+static constexpr bool immediateBufferingDefault = true;
+#else
+static constexpr bool immediateBufferingDefault = false;
+#endif
+CONFIG(bool, LuaImmediateModeBuffering).defaultValue(immediateBufferingDefault).description("Draw each gl.BeginEnd block with one glDrawArrays instead of one glVertex call per vertex. 0 restores glBegin/glEnd.");
 
 /*** Callouts for OpenGL API
  *
@@ -259,7 +267,14 @@ namespace {
 	LuaImmediateBatch luaBatch(LuaImmediateBatch::ReadGLValue);
 
 	// read at the start of each block, so it can be flipped at runtime for A/B runs
-	bool immediateBuffering = true;
+	bool immediateBuffering = immediateBufferingDefault;
+
+	// True while a gl.CreateList function runs. Commands are being recorded
+	// then, not executed, so GL state read at that moment is not the state the
+	// list will be called with. A buffered block has to read state (to fill in
+	// an attribute set part-way through, and to pick the draw path), so inside a
+	// list the real glBegin/glEnd calls are recorded instead.
+	bool compilingDisplayList = false;
 
 	struct ImmediateBufferingObserver {
 		void ConfigNotify(const std::string& key, const std::string& value) {
@@ -1149,7 +1164,7 @@ namespace {
 	void ImmBegin(GLenum mode)
 	{
 		// inside an open buffered block the inner block must join it, whatever the flag says now
-		if (immediateBuffering || luaBatch.Active()) {
+		if ((immediateBuffering && !compilingDisplayList) || luaBatch.Active()) {
 			luaBatch.Begin(mode);
 		} else {
 			glBegin(mode);
@@ -3014,8 +3029,11 @@ int LuaOpenGL::Rect(lua_State* L)
 	// edge flags, so glPolygonMode(GL_LINE) shows the internal diagonal.
 	// Emit the outline/points directly instead — identical output on
 	// conformant GL, correct output on quad-lowering drivers.
+	// (not while a display list is being recorded: the mode read then is not the
+	// mode the list will be called with, so the list records the plain rect)
 	GLint polyModes[2] = {GL_FILL, GL_FILL};
-	glGetIntegerv(GL_POLYGON_MODE, polyModes);
+	if (!compilingDisplayList)
+		glGetIntegerv(GL_POLYGON_MODE, polyModes);
 	if (polyModes[0] != GL_FILL) {
 		glBegin((polyModes[0] == GL_LINE) ? GL_LINE_LOOP : GL_POINTS);
 		glVertex2f(x1, y1);
@@ -6559,7 +6577,10 @@ int LuaOpenGL::CreateList(lua_State* L)
 	// build the list with the specified lua call/args
 	glNewList(list, GL_COMPILE);
 	SMatrixStateData prevMSD = GetLuaContextData(L)->glMatrixTracker.PushMatrixState(true);
+	const bool wasCompilingDisplayList = compilingDisplayList;
+	compilingDisplayList = true;
 	const int error = lua_pcall(L, (args - 1), 0, 0);
+	compilingDisplayList = wasCompilingDisplayList;
 	SMatrixStateData matData = GetLuaContextData(L)->glMatrixTracker.GetMatrixState();
 	GetLuaContextData(L)->glMatrixTracker.PopMatrixState(prevMSD, false);
 	glEndList();
