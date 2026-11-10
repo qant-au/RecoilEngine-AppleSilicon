@@ -1849,13 +1849,15 @@ void CGame::SimFrame() {
 			sscanf(e, "%d:%d", &mn, &mx);
 		return std::make_pair(mn, mx);
 	}();
-	// serverRequest=true when env-enabled: DumpState is cheat-gated, but demo
-	// replays of other players' games have cheats off; offline analysis is fine.
+	// serverRequest=true when env-enabled AND replaying a demo: DumpState is
+	// cheat-gated, but demo replays of other players' games have cheats off;
+	// offline analysis is fine. In a live game the cheat gate stays in force.
 	// outputFloats=true: raw float values instead of hashes, so two builds'
 	// dumps can be diffed numerically (ULP-level vs gross divergence).
-	DumpState(dumpStateRange.first, dumpStateRange.second, 1,
-	          (dumpStateRange.first >= 0) ? std::optional<bool>(true) : std::nullopt,
-	          std::nullopt, /*serverRequest=*/ (dumpStateRange.first >= 0));
+	const bool dumpStateFromEnv = (dumpStateRange.first >= 0) && gameSetup->hostDemo;
+	DumpState(dumpStateFromEnv ? dumpStateRange.first : -1, dumpStateFromEnv ? dumpStateRange.second : -1, 1,
+	          dumpStateFromEnv ? std::optional<bool>(true) : std::nullopt,
+	          std::nullopt, /*serverRequest=*/ dumpStateFromEnv);
 
 	ASSERT_SYNCED(gsRNG.GetGenState());
 	LEAVE_SYNCED_CODE();
