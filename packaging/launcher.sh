@@ -20,6 +20,19 @@ set -uo pipefail
 # file at start.
 unset PRD_DISABLE_CERT_CHECK PRD_SSL_CERT_FILE PRD_SSL_CERT_DIR BASH_ENV ENV
 
+# The test switches below this point (skip the update check, the messages, the
+# consent prompt; read another feed or message file) are for harnesses, and a
+# harness always runs against its own data folder (BAR_WRITEDIR_OVERRIDE). On
+# the player's real data folder they are ignored, and tools are found on the
+# system path only, so the environment of whoever starts the app cannot change
+# what it does there.
+if [ -z "${BAR_WRITEDIR_OVERRIDE:-}" ]; then
+  unset BAR_ASSUME_CONSENT BAR_SKIP_CONTENT_CHECK BAR_SKIP_ENGINE_NUDGE BAR_CONTENT_SCOPE \
+        BAR_MESSAGE_CONFIG_URL BAR_DIST_CFG_URL BAR_RELEASES_URL \
+        ACCURONA_UPDATE_FEED ACCURONA_SKIP_UPDATE
+  export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+fi
+
 HERE=$(cd "$(dirname "$0")" && pwd)          # .../Contents/MacOS
 CONTENTS=$(dirname "$HERE")
 RES="$CONTENTS/Resources"
@@ -261,8 +274,8 @@ HELPER="$HERE/progress-window"
 # across app reinstalls — the CONTENT sentinel above must NEVER be conflated
 # with consent, which was the old skip-the-disclaimer bug). Bump a *_VERSION
 # to re-show that dialog once.
-CONSENT_VERSION="1"
-NOTICE_VERSION="1"
+CONSENT_VERSION="2"
+NOTICE_VERSION="2"
 CONSENT_ACK="$WRITEDIR/.consent-ack"
 NOTICE_ACK="$WRITEDIR/.notice-ack"
 MESSAGE_SEEN="$WRITEDIR/.message-seen"
@@ -639,16 +652,22 @@ fi
 # advertises itself via $WRITEDIR/sl-connection.json, and exits on its own when
 # this PID (which becomes the engine on exec) is gone. Optional: the game still
 # runs without it, only replays and lobby downloads do not.
-rm -f "$WRITEDIR/sl-connection.json"
-if [ -x "$HERE/sl-bridge" ]; then
+BRIDGE_PID=""
+start_bridge() {
+  # a connection file with no bridge behind it makes the lobby wait on a dead port
+  rm -f "$WRITEDIR/sl-connection.json"
+  [ -x "$HERE/sl-bridge" ] || return 0
   ENGINE_VERSION="$(/usr/libexec/PlistBuddy -c "Print :EngineVersion" "$CONTENTS/Info.plist" 2>/dev/null || true)"
   "$HERE/sl-bridge" --writedir "$WRITEDIR" --prd "$HERE/pr-downloader" \
     --engine "$HERE/spring" --engine-version "$ENGINE_VERSION" \
     --config "$RES/launcher_extras.json" --online "$( [ -f "$RES/.online-play-disabled" ] && echo 0 || echo 1 )" \
     --parent-pid "$$" --log "$WRITEDIR/sl-bridge.log" >/dev/null 2>&1 &
+  BRIDGE_PID=$!
   # give it a moment to write sl-connection.json before the lobby looks for it
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$WRITEDIR/sl-connection.json" ] && break; sleep 0.1; done
-fi
+}
+bridge_alive() { [ -n "$BRIDGE_PID" ] && kill -0 "$BRIDGE_PID" 2>/dev/null; }
+start_bridge
 # SPRING_INFOLOG lets the engine's error dialog (Platform::MsgBox) attach the
 # full this-session log to any fatal it shows.
 # The engine runs as a child, not via exec, so the lobby can come back after an
@@ -657,8 +676,12 @@ fi
 export SPRING_DATADIR="$RES" SPRING_INFOLOG="$WRITEDIR/infolog.txt" SPRING_PACKAGE_VERSION="$PORT_VERSION"
 while :; do
   T0=$SECONDS
+  # the lobby is about to start (again): it needs a live bridge
+  bridge_alive || start_bridge
   "$HERE/spring" --write-dir "$WRITEDIR" --menu "$LOBBY_RAPID" "$@"
   RC=$?
+  # the engine is gone; whatever the bridge does next, its file is stale
+  bridge_alive || rm -f "$WRITEDIR/sl-connection.json"
   case "$RC" in
     # macOS refused to run the binary (bad arch, quarantine, corrupt file)
     126|127)

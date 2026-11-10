@@ -90,8 +90,23 @@ echo "== first run: notice + disclaimer shown, acks written, engine launched =="
 online_on; WD="$ROOT/w1"; run "$WD"
 { has message-check && has consent-notice && has consent-server && has spring-launched; } \
   && ok "message-check + notice + disclaimer + launch" || bad "first run" "$(calls)"
-[ "$(cat "$WD/.consent-ack" 2>/dev/null)" = "1" ] && ok ".consent-ack written (v1)" || bad "consent-ack"
-[ "$(cat "$WD/.notice-ack"  2>/dev/null)" = "1" ] && ok ".notice-ack written (v1)"  || bad "notice-ack"
+[ "$(cat "$WD/.consent-ack" 2>/dev/null)" = "2" ] && ok ".consent-ack written (v2)" || bad "consent-ack"
+[ "$(cat "$WD/.notice-ack"  2>/dev/null)" = "2" ] && ok ".notice-ack written (v2)"  || bad "notice-ack"
+
+echo "== an acknowledgement of the earlier wording (v1) is asked again =="
+WDV1="$ROOT/wv1"; mkdir -p "$WDV1"; echo 1 > "$WDV1/.consent-ack"; echo 1 > "$WDV1/.notice-ack"
+run "$WDV1"
+{ has consent-notice && has consent-server; } && ok "v1 acknowledgement -> both dialogs shown once more" || bad "v1 re-ask" "$(calls)"
+
+echo "== the player's real data folder: test switches and PATH are ignored =="
+# no BAR_WRITEDIR_OVERRIDE; HOME is redirected so the "real" folder is in the sandbox
+HOME1="$ROOT/home1"; mkdir -p "$HOME1"
+: > "$CALLS"
+timeout 15 env HOME="$HOME1" BAR_ASSUME_CONSENT=1 BAR_SKIP_CONTENT_CHECK=1 "$MACOS/launcher" >/dev/null 2>&1 </dev/null
+{ has message-check && has consent-notice && has consent-server; } \
+  && ok "BAR_ASSUME_CONSENT and BAR_SKIP_CONTENT_CHECK ignored without a data-folder override" || bad "switches honoured on the real folder" "$(calls)"
+[ -f "$HOME1/Library/Application Support/Beyond-All-Reason-mac/.consent-ack" ] \
+  && ok "acknowledgement written in the default data folder" || bad "default data folder not used"
 
 echo "== second run (same writedir): acked dialogs NOT reshown =="
 run "$WD"
