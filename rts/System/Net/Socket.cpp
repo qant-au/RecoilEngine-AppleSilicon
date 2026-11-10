@@ -22,7 +22,8 @@ bool CheckErrorCode(asio::error_code& err)
 	// connection reset can happen when host did not start up
 	// before the client wants to connect
 	if (!err || err.value() == asio::error::connection_reset ||
-		err.value() == asio::error::try_again) { // this should only ever happen with async sockets, but testing indicates it happens anyway...
+		err.value() == asio::error::try_again || // this should only ever happen with async sockets, but testing indicates it happens anyway...
+		err.value() == asio::error::would_block) { // what a full send buffer returns on Windows
 		return false;
 	} else {
 		LOG_L(L_WARNING, "Network error %i: %s", err.value(),

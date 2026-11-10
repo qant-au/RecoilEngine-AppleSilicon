@@ -1074,9 +1074,11 @@ void UDPConnection::SendPacket(Packet& pkt)
 
 	EMULATE_LATENCY( !EMULATE_PACKET_LOSS( LOSS_COUNTER ) ) {
 		mySocket->send_to(buffer(sendBuffer), addr, flags, err);
-		// a full send buffer surfaces as try_again, give it a moment to drain.
+		// a full send buffer surfaces as try_again (POSIX: EAGAIN) or would_block
+		// (Windows: WSAEWOULDBLOCK, where try_again is a different code that a
+		// send never returns), give it a moment to drain.
 		// once per flush pass, so a flush with multiple packets doesn't wait multiple times
-		if (err && err.value() == asio::error::try_again && !drainWaited) {
+		if (err && (err.value() == asio::error::try_again || err.value() == asio::error::would_block) && !drainWaited) {
 			drainWaited = true;
 			/* Balance between too many resends (lower)
 			 * and main thread stalls (higher) */ 
