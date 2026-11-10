@@ -124,6 +124,11 @@ if [ -d "$SRC/.git" ] || [ -f "$SRC/.git" ]; then
   fi
 fi
 
+# Mark the build: the full version string ("2026.09.02 (macOS port 0.13)",
+# shown by --version, in the log and to Lua as Engine.versionFull) says this
+# is not the official release. The sync version, which demos, saves and the
+# network compare, stays the bare release tag.
+PORT_MARK="macOS port ${ENGINE_PORT_VERSION:-$(tr -d '[:space:]' < "$BAR/packaging/PORT_VERSION")}"
 cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"} \
   -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
@@ -137,6 +142,7 @@ cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   -DCMAKE_OBJCXX_FLAGS="$PREFIX_MAP" \
   -DAI_TYPES="${AI_TYPES:-NATIVE}" -DAI_EXCLUDE_REGEX="CppTestAI" \
   -DUSERDOCS_PLAIN=ON \
+  -DVERSION_ADDITIONAL="$PORT_MARK" \
   -DCMAKE_C_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   -DCMAKE_OBJC_COMPILER_LAUNCHER=ccache \

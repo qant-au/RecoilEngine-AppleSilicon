@@ -233,7 +233,7 @@ if [ "$IDENTITY" != "-" ] && [ "${#NOTARY_AUTH[@]}" -gt 0 ]; then
 fi
 
 echo "=== [1/7] gated engine build ($SRC -> $BUILD)"
-ENGINE_SRC="$SRC" ENGINE_BUILD="$BUILD" MESA_PREFIX="$MESA_PREFIX" "$BAR/scripts/build-engine.sh"
+ENGINE_SRC="$SRC" ENGINE_BUILD="$BUILD" MESA_PREFIX="$MESA_PREFIX" ENGINE_PORT_VERSION="$PORTVER" "$BAR/scripts/build-engine.sh"
 # build-engine.sh hard-fails unless the streflop archive reproduces the
 # lane's libm parity hashes — "bare ninja" output can't reach the steps below.
 
@@ -469,6 +469,8 @@ NEUTER
   echo "message config: $MESSAGES_CONFIG"
   cp "$PKG/update-public-key" "$RESOURCES/update-public-key"
   printf '%s' "$UPDATE_FEED" > "$RESOURCES/.update-feed-url"
+  # the updater accepts an archive only under this address
+  printf '%s' "$UPDATE_DOWNLOAD_BASE" > "$RESOURCES/.update-download-base"
   echo "update feed: $UPDATE_FEED"
 fi
 
@@ -545,6 +547,12 @@ bundle_deps() { # bundle_deps <macho> [<source-dir-for-@rpath-siblings>]
         fi
         ;;
       *)
+        # every bundled library is built from pinned source under deps/: one
+        # that resolves into a package manager's prefix must stop the build,
+        # not be copied in
+        case "$dep" in /opt/homebrew/*|/usr/local/*|/opt/local/*)
+          echo "FATAL: $(basename "$m") depends on $dep, which is not one of this build's own libraries"; exit 1;;
+        esac
         if [ ! -f "$FRAMEWORKS/$base" ]; then
           cp "$dep" "$FRAMEWORKS/$base"
           chmod u+w "$FRAMEWORKS/$base"
