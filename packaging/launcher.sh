@@ -50,12 +50,18 @@ fi
 # share this write dir — two concurrent pr-downloaders would race the same
 # pool .tmp paths and can rename a corrupt file into the pool. mkdir is the
 # atomic primitive; a dead owner (crash, force-quit) is detected by pid
-# liveness and the lock reclaimed. Held for our whole lifetime — the exec'd
-# engine keeps our pid, so a second launch while playing is also refused.
+# liveness and the lock reclaimed. Held for our whole lifetime: the engine runs
+# as our child, so a second launch while playing is also refused. The lock is
+# removed when we exit, and a leftover one only counts while its pid is still a
+# launcher (pids are reused, so a live pid alone proves nothing).
 LOCK="$WRITEDIR/.launcher-lock"
+lock_owner_is_launcher() {
+  local pid; pid=$(cat "$LOCK/pid" 2>/dev/null)
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null \
+    && ps -p "$pid" -o command= 2>/dev/null | grep -q '/launcher'
+}
 if ! mkdir "$LOCK" 2>/dev/null; then
-  OLDPID=$(cat "$LOCK/pid" 2>/dev/null)
-  if [ -n "$OLDPID" ] && kill -0 "$OLDPID" 2>/dev/null; then
+  if lock_owner_is_launcher; then
     fail_dialog "Beyond All Reason is already running or updating. If you cannot find its window, wait a few seconds and try again."
     exit 0
   fi
@@ -66,6 +72,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   fi
 fi
 echo $$ > "$LOCK/pid"
+trap '[ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK"' EXIT
 # content pool is re-downloadable — keep it out of Time Machine backups.
 # Fire-and-forget: tmutil talks to backupd and can block (stuck daemon /
 # permissions); this exclusion is cosmetic and must never delay launch.

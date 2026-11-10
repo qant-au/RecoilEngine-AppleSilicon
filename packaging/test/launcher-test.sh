@@ -313,6 +313,15 @@ WD16="$ROOT/w16"; mkdir -p "$WD16/.launcher-lock"; : > "$WD16/.lobby-installed"
 echo 99999999 > "$WD16/.launcher-lock/pid"    # no such pid
 run "$WD16" BAR_ASSUME_CONSENT=1
 has spring-launched && ok "dead-pid lock reclaimed, launch proceeds" || bad "stale lock" "$(calls)"
+[ ! -e "$WD16/.launcher-lock" ] && ok "lock removed when the launcher exits" || bad "lock left behind" "$(ls "$WD16/.launcher-lock" 2>&1)"
+
+echo "== a leftover lock naming a live process that is not a launcher is reclaimed =="
+WD17="$ROOT/w17"; mkdir -p "$WD17/.launcher-lock"; : > "$WD17/.lobby-installed"
+sleep 60 & OTHER=$!
+echo "$OTHER" > "$WD17/.launcher-lock/pid"    # a reused pid: alive, but not ours
+run "$WD17" BAR_ASSUME_CONSENT=1
+kill "$OTHER" 2>/dev/null; wait "$OTHER" 2>/dev/null
+has spring-launched && ok "reused-pid lock reclaimed, launch proceeds" || bad "reused-pid lock" "$(calls)"
 
 echo
 echo "RESULT: $pass passed, $fail failed"
