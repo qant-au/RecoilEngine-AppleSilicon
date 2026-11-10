@@ -12,7 +12,8 @@ and what remains unproven. Every claim states its evidence, and every set of
 numbers states the engine version and build it was measured on: sections 1 to 4
 come from the original port at engine 2025.06.24 unless a subsection says
 otherwise, and 3a and 3b are this repository's own runs. Evidence from one
-engine version does not certify another (section 5).
+engine version does not certify another (section 5). The rules this evidence
+is measured against are in `docs/DETERMINISM.md`.
 
 ## How sync is measured (for non-engine-devs)
 
@@ -196,12 +197,17 @@ against an official Windows client.
   end of the longest (92k-frame) demo; the same class of Lua memory pressure
   is visible on official binaries in long headless runs. Live games are
   unaffected (our longest live soak game ran 100,657 frames).
+- **A NaN in synced state would desync a Mac.** An invalid operation
+  produces a NaN with the sign bit set on x86 and clear on arm64, and the
+  checksums cover the raw bits. No replay run here has produced one, and
+  correct synced code does not, but nothing proves the absence. Details and
+  two related streflop findings are in `docs/DETERMINISM.md`, Known Limits.
 - **Desync triage is built in.** During demo playback,
   `SPRING_DUMP_STATE_RANGE=min:max` dumps full synced state (RNG, units, features, projectiles, raw floats) per
   frame in the range, so any reported desync can be bisected to the exact
   frame and subsystem against a reference dump.
 
-## Appendix A — register of synced-code changes
+## Appendix A: Register Of Synced-Code Changes
 
 This is every change the macOS layer makes to code that can reach synced
 state, relative to the upstream release tag it is based on. It is read off the
