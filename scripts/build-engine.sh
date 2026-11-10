@@ -124,19 +124,6 @@ if [ -d "$SRC/.git" ] || [ -f "$SRC/.git" ]; then
   fi
 fi
 
-# CircuitAI (rlcevg/CircuitAI, upstream submodule) needs the same AppleClang/arm64
-# build fix BARb carries (AngelScript's arm64 assembly). It is applied here from
-# patches/circuitai rather than forked, so the submodule stays on upstream's
-# commit; .gitmodules sets ignore=dirty for it. Idempotent.
-for pf in "$BAR"/patches/circuitai/*.patch; do
-  [ -f "$pf" ] || continue
-  if git -C "$SRC/AI/Skirmish/CircuitAI" apply --check "$pf" 2>/dev/null; then
-    git -C "$SRC/AI/Skirmish/CircuitAI" apply "$pf"
-  elif ! git -C "$SRC/AI/Skirmish/CircuitAI" apply --reverse --check "$pf" 2>/dev/null; then
-    echo "FATAL: $pf neither applies nor is already applied to AI/Skirmish/CircuitAI"; exit 1
-  fi
-done
-
 cmake --fresh -S "$SRC" -B "$BUILD" -G Ninja \
   ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"} \
   -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
