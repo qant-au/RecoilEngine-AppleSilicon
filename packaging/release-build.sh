@@ -859,6 +859,8 @@ elif [ "$REPLAY_SMOKE" = "1" ]; then
   SMOKELOG=$(mktemp)
   SMOKEDIR=$(mktemp -d)
   mkdir -p "$SMOKEDIR/rapid"   # skip the first-run lobby download
+  # the smoke only reads the driver identity line; a build gate plays no sound
+  printf 'Sound = 0\n' > "$SMOKEDIR/springsettings.cfg"
   # stock macOS has no timeout(1); Homebrew coreutils provides gtimeout
   TIMEOUT_BIN=$(command -v timeout || command -v gtimeout) \
     || { echo "FATAL: neither timeout nor gtimeout found (brew install coreutils)"; exit 1; }
