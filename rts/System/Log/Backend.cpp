@@ -77,15 +77,16 @@ namespace log_formatter {
 
 
 // ---------------------------------------------------------------------------
-// Generic near-identical repeat coalescing (bounds infolog.txt growth).
+// Near-identical repeat coalescing for the named flood sources (bounds
+// infolog.txt growth). It applies ONLY to what IsFloodSource() lists below;
+// every other record is written unchanged.
 //
 // Motivation: high-frequency lines — per-event input diagnostics
 // (SPRING_DBG_INPUT), the per-stall "[stall] draw gap" warning, and any future
 // per-frame message — can bloat the single infolog.txt to hundreds of MB over
 // a long session, making it useless as a bug-report attachment. Instead of a
 // separate diagnostics file or per-source throttles, floods are collapsed HERE,
-// at the one choke point every record passes through, so the guarantee covers
-// ALL sources uniformly.
+// at the one choke point every record passes through.
 //
 // Mechanism: each record's formatted message is reduced to a "signature" by
 // collapsing every run of digits to a single '#' (so "[input] pos=100,200" and
@@ -95,9 +96,10 @@ namespace log_formatter {
 // ("[log] previous line repeated N more time(s) ...") is emitted every
 // ROLLUP_EVERY suppressed lines, again when a different line breaks the run, and
 // once more at shutdown — so the count is never lost and the reporter sees
-// totals. Distinct/rare lines (errors, the startup <User Config> dump, one-off
-// warnings) have distinct signatures and are never suppressed. With the debug
-// gates off there is nothing to coalesce, so default behavior is unchanged.
+// totals. Folding numbers makes unrelated lines look alike ("<Alice> go 1" and
+// "<Alice> go 2", two Lua errors at different line numbers), which is why the
+// mechanism is limited to the listed flood sources and never sees chat, errors
+// or game messages.
 namespace log_coalesce {
 	// One rollup emitted per this many suppressed duplicates (keeps a long flood
 	// visibly "live" while bounding rollup volume itself).
@@ -122,6 +124,20 @@ namespace log_coalesce {
 	static std::mutex mutex;
 	static Slot       slots[NUM_SLOTS] = {};
 	static uint64_t   seqCounter = 0;
+
+	// The sources that can log every event or every frame, and so the only ones
+	// whose near-identical repeats are collapsed: the opt-in input and config
+	// traces (their own sections) and the per-stall and per-hitch warnings.
+	// Anything not listed here is never suppressed. Add a source here when a new
+	// per-frame message appears; do not widen it to a whole log level or to the
+	// default section.
+	static bool IsFloodSource(const char* section, const char* msg)
+	{
+		if (section != nullptr && (strcmp(section, "Input") == 0 || strcmp(section, "Config") == 0))
+			return true;
+
+		return (strncmp(msg, "[stall] ", 8) == 0 || strncmp(msg, "[hitch] ", 8) == 0);
+	}
 
 	// Reduce (section, message) to a signature: the section, a separator, then
 	// the message with each varying numeric token collapsed to a single '#'.
@@ -228,11 +244,10 @@ void log_backend_record(int level, const char* section, const char* fmt, va_list
 	int  rollupLevel = LOG_LEVEL_DEBUG;
 	char rollupMsg[192] = {0};
 	char rollupSection[64] = {0};
-	// stack frames differ only in their numbers, so the signature folds a whole
-	// trace into one line and the watchdog or crash dump loses everything but
-	// its first frame. never coalesce that section
-	const bool isStackTrace = (section != nullptr && strcmp(section, "CrashHandler") == 0);
-	if (!isStackTrace) {
+	// only the named flood sources are coalesced; every other record (chat, Lua
+	// errors, game messages, stack traces) is written as it comes, however much
+	// two of them look alike once their numbers are folded
+	if (log_coalesce::IsFloodSource(section, cur_record.msg)) {
 		using namespace log_coalesce;
 		char sig[sizeof(Slot::sig)];
 		MakeSig(section, cur_record.msg, sig, sizeof(sig));
