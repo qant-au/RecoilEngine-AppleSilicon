@@ -22,6 +22,8 @@ BASH5=$(command -v /opt/homebrew/bin/bash || command -v bash)
 JOBS="${JOBS:-$(( $(sysctl -n hw.ncpu 2>/dev/null || nproc) - 2 ))}"
 mkdir -p logs/local
 FAIL=0
+MIN_TESTS=30
+CREG_UPSTREAM_GAP='between drawSorted & blockPreciseCol'
 
 run() { # run <name> <args...>
   local name=$1; shift
@@ -47,10 +49,22 @@ case "$WHAT" in
     log=logs/local/check-nonmac-linux-ctest.log
     echo "=== linux-ctest (log: $log)"
     "$BASH5" docker-build-v2/build.sh --arch amd64 --compile linux -t check > "$log" 2>&1
-    echo "    $(grep -E 'tests passed' "$log" | tail -1)"
-    unexpected=$(sed -n '/The following tests FAILED/,$p' "$log" \
-                 | grep -oE '[0-9]+ - test[A-Za-z0-9_]+' | awk '{print $3}' | sort -u | grep -vx testCreg || true)
+    rc=$?
+    # the step counts only if ctest reported a result with every test in it
+    summary=$(grep -E '[0-9]+% tests passed, [0-9]+ tests failed out of [0-9]+' "$log" | tail -1)
+    echo "    ${summary:-no ctest result (exit $rc)}"
+    total=$(echo "$summary" | sed -E 's/.*out of ([0-9]+).*/\1/')
+    if [ -z "$summary" ] || [ "${total:-0}" -lt "$MIN_TESTS" ]; then
+      echo "    FAILED: the unit tests did not all run (expected at least $MIN_TESTS)"; FAIL=1
+    fi
+    failed=$(sed -n '/The following tests FAILED/,$p' "$log" \
+             | grep -oE '[0-9]+ - test[A-Za-z0-9_]+' | awk '{print $3}' | sort -u)
+    unexpected=$(echo "$failed" | grep -vx testCreg || true)
     if [ -n "$unexpected" ]; then echo "    UNEXPECTED failures: $(echo $unexpected)"; FAIL=1; fi
+    # testCreg is excused for the known upstream gap only (see run-unit-tests.sh)
+    ours=$(grep 'Missing member' "$log" | grep -v "$CREG_UPSTREAM_GAP" \
+           | sed -E 's/.*in class ([A-Za-z0-9_]+).*/\1/' | sort -u)
+    if [ -n "$ours" ]; then echo "    UNEXPECTED: testCreg reports unregistered members in: $(echo $ours)"; FAIL=1; fi
     run linux-build linux
     ;;
 esac

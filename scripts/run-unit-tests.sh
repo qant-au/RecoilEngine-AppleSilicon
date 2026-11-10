@@ -5,12 +5,15 @@
 #
 # Builds in build-tests/, NOT build-engine/: a bare ninja in build-engine/ undoes
 # the gcc-swapped libm objects (see build-engine.sh). AI_TYPES=NONE.
-# Expected on 2026.09.02 (and 2026.07.04): 28/29, the one failure testCreg
-# (upstream's unregistered CSolidObject member, reported as missing bytes in
-# every projectile class; fixed on Recoil master).
+# Expected on 2026.09.02: 29 of 30, the one failure testCreg, for one known
+# upstream gap (an unregistered CProjectile member, reported as a missing byte
+# "between drawSorted & blockPreciseCol" in every projectile class). testCreg is
+# excused for that message only; any other class it reports fails the run.
 #
 # Usage: scripts/run-unit-tests.sh [ctest args...]     prints UNIT_TESTS_OK
 set -uo pipefail
+MIN_TESTS=30
+CREG_UPSTREAM_GAP='between drawSorted & blockPreciseCol'
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$BAR"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
@@ -35,8 +38,28 @@ cmake --fresh -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
 ninja -C build-tests -j"$(sysctl -n hw.ncpu)" tests spring-headless basecontent \
   > logs/local/unit-tests-build.log 2>&1 || { echo "FATAL: build failed (logs/local/unit-tests-build.log)"; grep -E '^FAILED|error:' logs/local/unit-tests-build.log | head; exit 1; }
 (cd build-tests && ctest --timeout 900 "$@") > logs/local/unit-tests.log 2>&1
-grep -E 'tests passed' logs/local/unit-tests.log
-unexpected=$(sed -n '/The following tests FAILED/,$p' logs/local/unit-tests.log \
-  | grep -oE '[0-9]+ - test[A-Za-z0-9_]+' | awk '{print $3}' | sort -u | grep -vx testCreg || true)
+rc=$?
+# OK is only printed for a run that produced a result: ctest's own summary line
+# must be there, and a full run (no extra ctest args) must hold every test.
+summary=$(grep -E '[0-9]+% tests passed, [0-9]+ tests failed out of [0-9]+' logs/local/unit-tests.log | tail -1)
+[ -n "$summary" ] || { echo "UNIT_TESTS_FAIL: ctest printed no result (exit $rc, logs/local/unit-tests.log)"; exit 1; }
+echo "$summary"
+total=$(echo "$summary" | sed -E 's/.*out of ([0-9]+).*/\1/')
+if [ $# -eq 0 ] && [ "$total" -lt "$MIN_TESTS" ]; then
+  echo "UNIT_TESTS_FAIL: only $total tests ran (expected at least $MIN_TESTS)"; exit 1
+fi
+failed=$(sed -n '/The following tests FAILED/,$p' logs/local/unit-tests.log \
+  | grep -oE '[0-9]+ - test[A-Za-z0-9_]+' | awk '{print $3}' | sort -u)
+unexpected=$(echo "$failed" | grep -vx testCreg || true)
 if [ -n "$unexpected" ]; then echo "UNIT_TESTS_FAIL: $(echo $unexpected)"; exit 1; fi
+if [ "$rc" -ne 0 ] && [ -z "$failed" ]; then
+  echo "UNIT_TESTS_FAIL: ctest exit $rc with no failed test listed (logs/local/unit-tests.log)"; exit 1
+fi
+# testCreg is excused only for the known upstream gap. Any other class it
+# reports is a registration gap of ours and fails the run.
+if echo "$failed" | grep -qx testCreg; then
+  ours=$(grep 'Missing member' build-tests/Testing/Temporary/LastTest.log 2>/dev/null \
+    | grep -v "$CREG_UPSTREAM_GAP" | sed -E 's/.*in class ([A-Za-z0-9_]+).*/\1/' | sort -u)
+  if [ -n "$ours" ]; then echo "UNIT_TESTS_FAIL: testCreg reports unregistered members in: $(echo $ours)"; exit 1; fi
+fi
 echo "UNIT_TESTS_OK"
