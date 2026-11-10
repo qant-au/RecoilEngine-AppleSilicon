@@ -47,35 +47,26 @@ if    (NOT NO_SOUND)
 	if    (APPLE)
 		# On macOS, find_package(OpenAL) resolves Apple's system
 		# OpenAL.framework, whose 3D positional path is broken/deprecated and
-		# produces no SFX. Link openal-soft instead. CI installs it with
-		# "brew install openal-soft" (a keg-only formula, so it is not in the
-		# default link path) and bundles the resulting libopenal.dylib.
-		#
-		# Locate it via find_library with HINTS rather than a hardcoded path:
-		# OPENAL_SOFT_PREFIX (set by CI to "$(brew --prefix openal-soft)") is
-		# tried first, followed by the standard Homebrew keg locations on both
-		# Apple Silicon and Intel.
+		# produces no SFX. Link openal-soft instead, from the prefix the build
+		# passes in OPENAL_SOFT_PREFIX. Nothing else is searched, so a copy
+		# installed on the build machine can never be picked up by accident.
 		set(OPENAL_SOFT_PREFIX "" CACHE PATH
-			"Prefix of an openal-soft installation (e.g. $(brew --prefix openal-soft)). Used on macOS to link openal-soft instead of Apple's OpenAL.framework.")
+			"Prefix of the openal-soft installation to link on macOS instead of Apple's OpenAL.framework.")
 		find_library(OPENAL_SOFT_LIBRARY
 			NAMES openal
 			HINTS
 				${OPENAL_SOFT_PREFIX}/lib
-				/opt/homebrew/opt/openal-soft/lib
-				/usr/local/opt/openal-soft/lib
 			NO_DEFAULT_PATH
 		)
 		find_path(OPENAL_SOFT_INCLUDE_DIR
 			NAMES al.h
 			HINTS
 				${OPENAL_SOFT_PREFIX}/include
-				/opt/homebrew/opt/openal-soft/include
-				/usr/local/opt/openal-soft/include
 			PATH_SUFFIXES AL
 			NO_DEFAULT_PATH
 		)
 		if    (NOT OPENAL_SOFT_LIBRARY OR NOT OPENAL_SOFT_INCLUDE_DIR)
-			message(FATAL_ERROR "openal-soft not found on macOS. Install it (brew install openal-soft) and pass -DOPENAL_SOFT_PREFIX=$(brew --prefix openal-soft).")
+			message(FATAL_ERROR "openal-soft not found on macOS. Pass -DOPENAL_SOFT_PREFIX=<prefix of an openal-soft installation>.")
 		endif ()
 		message(STATUS "macOS: linking openal-soft (${OPENAL_SOFT_LIBRARY}, headers ${OPENAL_SOFT_INCLUDE_DIR})")
 		add_library(OpenAL::OpenAL UNKNOWN IMPORTED)
