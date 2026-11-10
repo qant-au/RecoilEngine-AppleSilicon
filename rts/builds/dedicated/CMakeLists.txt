@@ -83,7 +83,7 @@ elseif	(WIN32)
 	set(sources_engine_Platform_CrashHandler
 		${ENGINE_SRC_ROOT_DIR}/System/Platform/Win/seh.cpp
 		${ENGINE_SRC_ROOT_DIR}/System/Platform/Win/CrashHandler.cpp)
-elseif (APPLE)
+elseif	(APPLE)
 	set(sources_engine_Platform_CrashHandler
 		${ENGINE_SRC_ROOT_DIR}/System/Platform/CpuID.cpp
 		${ENGINE_SRC_ROOT_DIR}/System/Platform/Threading.cpp
@@ -147,14 +147,12 @@ if    (WIN32)
 	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Win/WinVersion.cpp)
 	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/SharedLib.cpp)
 	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Win/DllLib.cpp)
-elseif (APPLE)
+else  ()
 	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Linux/Hardware.cpp)
-	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/SharedLib.cpp)
-	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Linux/SoLib.cpp)
-else ()
-	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Linux/Hardware.cpp)
-	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/SharedLib.cpp)
-	list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Linux/SoLib.cpp)
+	if (APPLE)
+		list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/SharedLib.cpp)
+		list(APPEND system_files ${ENGINE_SRC_ROOT_DIR}/System/Platform/Linux/SoLib.cpp)
+	endif ()
 endif ()
 
 set(engineDedicatedSources

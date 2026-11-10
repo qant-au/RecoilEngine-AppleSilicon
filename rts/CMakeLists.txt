@@ -36,10 +36,12 @@ endif()
 
 ### give error when not found
 find_package_static(DevIL REQUIRED)
-# DevIL's CMake module sets IL_INCLUDE_DIR to the directory containing il.h (e.g. /include/IL)
-# but code uses #include <IL/il.h>, so we need the parent directory
-get_filename_component(_IL_PARENT_DIR "${IL_INCLUDE_DIR}" DIRECTORY)
-include_directories(${_IL_PARENT_DIR})
+if    (APPLE)
+	# DevIL's CMake module sets IL_INCLUDE_DIR to the directory containing il.h (e.g. /include/IL)
+	# but code uses #include <IL/il.h>, so we need the parent directory
+	get_filename_component(_IL_PARENT_DIR "${IL_INCLUDE_DIR}" DIRECTORY)
+	include_directories(${_IL_PARENT_DIR})
+endif (APPLE)
 
 ### Assemble common include dirs
 include_directories(BEFORE lib)
@@ -146,15 +148,14 @@ make_global_var(engineSources
 		${sources_engine_ExternalAI}
 	)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/assimp/include) #FIXME: hack for rts/Rendering/Models/IModelParser.cpp
-# BEFORE: the DevIL fix above adds /opt/homebrew/include to the global include
-# path, where a transitively-installed Homebrew simdjson.h can shadow our
-# vendored, version-matched copy and break the build (newer simdjson trips an
-# AppleClang macro collision). Prepend so <simdjson.h> always resolves here.
-include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/lib/simdjson/include)
-# Same for <fmt/*.h>: a Homebrew fmt (e.g. pulled in by node or ccache) is
-# newer than the vendored libfmt.a the engine links, and headless TUs compiled
-# against its headers reference fmt::detail::allocate, which libfmt.a lacks.
-include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt/include)
+if    (APPLE)
+	# BEFORE: the DevIL include above adds a directory to the global include
+	# path that can hold other libraries' headers too. Prepend the vendored
+	# simdjson and fmt, so <simdjson.h> and <fmt/*.h> always resolve to the
+	# copies the engine links.
+	include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/lib/simdjson/include)
+	include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/lib/fmt/include)
+endif (APPLE)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/fastgltf/include)
 
 ### Add headers for generated project files (e.g. Code::Blocks)

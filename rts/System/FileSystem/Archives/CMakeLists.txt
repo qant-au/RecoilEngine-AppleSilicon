@@ -39,20 +39,30 @@ add_library(archives STATIC ${archives_sources})
 if (THREADPOOL)
 	target_compile_definitions(archives PRIVATE -DTHREADPOOL)
 endif()
-target_include_directories(archives
-	PRIVATE ${SOURCE_ROOT} ${NOWIDE_INCLUDE_DIR})
-# SYSTEM: Homebrew's minizip dir is /opt/homebrew/include, which as a plain -I
-# shadows the bundled rts/lib/fmt headers whenever brew's fmt is installed.
-target_include_directories(archives SYSTEM
-	PRIVATE ${SPRING_MINIZIP_INCLUDE_DIR})
+if (APPLE)
+	# SYSTEM: the minizip include directory can hold other libraries' headers,
+	# which as a plain -I would shadow the bundled rts/lib/fmt headers.
+	target_include_directories(archives
+		PRIVATE ${SOURCE_ROOT} ${NOWIDE_INCLUDE_DIR})
+	target_include_directories(archives SYSTEM
+		PRIVATE ${SPRING_MINIZIP_INCLUDE_DIR})
+else ()
+	target_include_directories(archives
+		PRIVATE ${SOURCE_ROOT} ${SPRING_MINIZIP_INCLUDE_DIR} ${NOWIDE_INCLUDE_DIR})
+endif ()
 target_link_libraries(archives
 	PRIVATE 7zip ${SPRING_MINIZIP_LIBRARY} Tracy::TracyClient nowide::nowide fmt::fmt)
 
 add_library(archives_nothreadpool STATIC ${archives_sources})
 target_compile_options(archives_nothreadpool PRIVATE ${PIC_FLAG})
-target_include_directories(archives_nothreadpool
-	PRIVATE ${SOURCE_ROOT} ${NOWIDE_INCLUDE_DIR})
-target_include_directories(archives_nothreadpool SYSTEM
-	PRIVATE ${SPRING_MINIZIP_INCLUDE_DIR})
+if (APPLE)
+	target_include_directories(archives_nothreadpool
+		PRIVATE ${SOURCE_ROOT} ${NOWIDE_INCLUDE_DIR})
+	target_include_directories(archives_nothreadpool SYSTEM
+		PRIVATE ${SPRING_MINIZIP_INCLUDE_DIR})
+else ()
+	target_include_directories(archives_nothreadpool
+		PRIVATE ${SOURCE_ROOT} ${SPRING_MINIZIP_INCLUDE_DIR} ${NOWIDE_INCLUDE_DIR})
+endif ()
 target_link_libraries(archives_nothreadpool
 	PRIVATE 7zip ${SPRING_MINIZIP_LIBRARY} nowide::nowide fmt::fmt)
