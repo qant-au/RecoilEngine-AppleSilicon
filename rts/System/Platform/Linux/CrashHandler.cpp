@@ -1019,7 +1019,10 @@ namespace CrashHandler
 	{
 		switch (signal) {
 			case SIGINT:
-			case SIGTERM: {
+			#if defined(__APPLE__)
+			case SIGTERM:
+			#endif
+			{
 				// ctrl+c / external terminate = kill. SIGTERM was previously
 				// left to SDL's silent default handler, so an externally
 				// TERMed game shut down cleanly with NO log evidence of why
@@ -1148,7 +1151,9 @@ namespace CrashHandler
 		sigaction(SIGFPE,  &sa, nullptr); // div0 and more
 		sigaction(SIGABRT, &sa, nullptr);
 		sigaction(SIGINT,  &sa, nullptr);
+		#if defined(__APPLE__)
 		sigaction(SIGTERM, &sa, nullptr); // external terminate: log sender, clean quit
+		#endif
 		// sigaction(SIGSTOP, &sa, nullptr); // cannot be caught
 		sigaction(SIGCONT, &sa, nullptr);
 		sigaction(SIGBUS,  &sa, nullptr); // on macosx EXC_BAD_ACCESS (mach exception) is translated to SIGBUS
@@ -1167,7 +1172,9 @@ namespace CrashHandler
 		sigaction(SIGFPE,  &sa, nullptr);
 		sigaction(SIGABRT, &sa, nullptr);
 		sigaction(SIGINT,  &sa, nullptr);
+		#if defined(__APPLE__)
 		sigaction(SIGTERM, &sa, nullptr);
+		#endif
 		// sigaction(SIGSTOP, &sa, nullptr);
 		sigaction(SIGCONT, &sa, nullptr);
 		sigaction(SIGBUS,  &sa, nullptr);
