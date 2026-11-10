@@ -17,7 +17,16 @@ network) is malicious, report it to the
 
 Only what is in this repository: the engine binaries built from this source,
 the bundled driver stack built from pinned upstream Mesa plus the committed
-patches, and the launcher. Every release is Developer ID signed and notarized
-by Apple, with SHA-256 checksums published alongside. **Download only from
-this repository's Releases page and verify the checksums** — no other
-distribution channel is ours.
+patches, and the launcher.
+
+There is no published release yet. A build made from this source with
+`make app` is ad-hoc signed and runs only on the Mac that built it. When
+releases are published they will be on this repository's Releases page and
+nowhere else: no other distribution channel is ours.
+
+On each launch the app reads two files from this repository:
+
+- an update feed. An update is installed only if its archive verifies against
+  the public key in `packaging/update-public-key`;
+- a message file, `message-config/messages.json` on the `main` branch, which
+  can show a notice or stop a version from starting.
