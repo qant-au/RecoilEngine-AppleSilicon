@@ -5,6 +5,12 @@ ADD_SUBDIRECTORY(fmt)
 set_target_properties(fmt PROPERTIES POSITION_INDEPENDENT_CODE ON)
 ADD_SUBDIRECTORY(glad)
 ADD_SUBDIRECTORY(smmalloc)
+if (APPLE)
+	# libc++ does not pull <cstdlib> and <type_traits> in where libstdc++
+	# does. Supplied from here, so the vendored source stays as its upstream
+	# wrote it.
+	target_compile_options(smmalloc PRIVATE "SHELL:-include cstdlib" "SHELL:-include type_traits")
+endif ()
 
 # Mimalloc - only build if USE_MIMALLOC is enabled
 if (USE_MIMALLOC)
@@ -68,13 +74,14 @@ SET(GFLAGS_BUILD_TESTING              FALSE)
 SET(GFLAGS_INSTALL_HEADERS            FALSE)
 SET(GFLAGS_INSTALL_SHARED_LIBS        FALSE)
 SET(GFLAGS_INSTALL_STATIC_LIBS        FALSE)
-# As a subdirectory build, gflags defaults to namespace "gflags" only. On
-# macOS Homebrew's <gflags/gflags.h> may be picked up first via
-# /opt/homebrew/include (DevIL etc. drag it in), and that header pins
-# GFLAGS_NAMESPACE=google -- causing the DEFINE_* macros in engine code to
-# emit google::FlagRegisterer references. Build the vendored gflags with
-# both namespaces so the resulting static lib resolves either spelling.
-SET(GFLAGS_NAMESPACE "google;gflags")
+if (APPLE)
+	# As a subdirectory build, gflags defaults to namespace "gflags" only. If a
+	# system <gflags/gflags.h> is found first, it pins GFLAGS_NAMESPACE=google
+	# and the DEFINE_* macros in engine code emit google::FlagRegisterer
+	# references. Build the vendored gflags with both namespaces, so the
+	# static library resolves either spelling.
+	SET(GFLAGS_NAMESPACE "google;gflags")
+endif ()
 
 #Meh-meh
 if (WIN32)
@@ -125,6 +132,10 @@ endforeach()
 
 ADD_SUBDIRECTORY(assimp)
 target_compile_definitions(assimp PRIVATE -DASSIMP_BUILD_NO_OWN_ZLIB)
+if (APPLE)
+	# the same for <cmath> in assimp's .inl files
+	target_compile_options(assimp PRIVATE -include cmath)
+endif ()
 
 # Suppress warnings in vendored assimp (we're not going to modify the library code)
 # Vendored assimp 4.0.1 trips these warnings in its own code.

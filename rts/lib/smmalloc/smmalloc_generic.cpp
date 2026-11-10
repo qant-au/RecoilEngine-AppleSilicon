@@ -1,4 +1,3 @@
-#include <cstdlib>
 // The MIT License (MIT)
 //
 // 	Copyright (c) 2017-2021 Sergey Makeev
