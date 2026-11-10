@@ -16,6 +16,7 @@
 #                              [--notary-profile <keychain-profile>]
 #                              [--version <tag>] [--profile bar|engine]
 #                              [--with-synctest] [--with-visreg] [--certify]
+#                              [--with-dsym]
 #                              [--enable-online | --disable-online]
 # Without --identity the bundle is ad-hoc signed (local testing only; will
 # not pass Gatekeeper on other machines). Notarization runs only when both
@@ -134,6 +135,10 @@ UPDATE_SIGNING_KEY="${ACCURONA_UPDATE_SIGNING_KEY:-$HOME/.accurona/update-signin
 ALLOW_RELEASE_OVERRIDES=0
 RUN_SYNC_TEST=${RELEASE_SYNC_TEST:-0}
 RUN_VISREG=${RELEASE_VISREG:-0}
+# Debug symbols (.dSYM) for the engine binaries, written before the strip so a
+# crash report from this build can be resolved to files and lines later.
+# Always on for a Developer ID build; --with-dsym (RELEASE_DSYM=1) otherwise.
+KEEP_DSYM=${RELEASE_DSYM:-0}
 REPLAY_SMOKE=${RELEASE_CERTIFY:-0}
 
 while [ $# -gt 0 ]; do
@@ -158,6 +163,7 @@ while [ $# -gt 0 ]; do
     --with-synctest) RUN_SYNC_TEST=1; shift;;
     --skip-sync-test) RUN_SYNC_TEST=0; shift;;     # now the default; kept for compat
     --with-visreg) RUN_VISREG=1; shift;;
+    --with-dsym) KEEP_DSYM=1; shift;;
     --allow-release-overrides) ALLOW_RELEASE_OVERRIDES=1; shift;;
     --with-perf) echo "--with-perf: there is no perf gate yet (scripts/visreg.sh has none)"; exit 2;;
     *) echo "unknown arg: $1"; exit 2;;
@@ -653,6 +659,28 @@ echo "deployment-target audit: every bundled Mach-O loads on macOS $MACOSX_DEPLO
 # -S drops the debug (STABS) entries only and keeps the regular symbol table,
 # so crash backtraces still resolve function names. Must run before codesign:
 # stripping a signed Mach-O invalidates its signature.
+#
+# The strip also removes what a crash report needs to name files and lines, and
+# the next build overwrites the object files that still hold it. So first, for
+# a build that may be handed to someone else, collect it into .dSYM bundles.
+# They stay on this machine: they hold builder paths and are not part of any
+# artifact. The driver libraries are built without debug information, so only
+# the engine binaries have any.
+[ "$IDENTITY" != "-" ] && KEEP_DSYM=1
+if [ "$KEEP_DSYM" = "1" ]; then
+  DSYM_DIR="$OUT/symbols/${VERSION}-port${PORTVER}-$PROFILE"
+  rm -rf "$DSYM_DIR"; mkdir -p "$DSYM_DIR"
+  for m in "${ALL_MACHO[@]}"; do
+    case "$(basename "$m")" in spring|spring-headless|spring-dedicated|libunitsync.dylib) ;; *) continue;; esac
+    dsymutil "$m" -o "$DSYM_DIR/$(basename "$m").dSYM" 2>/dev/null \
+      || { echo "FATAL: dsymutil failed for ${m#"$APP"/}"; exit 1; }
+    [ "$(dwarfdump --uuid "$m" | awk '{print $2}')" = "$(dwarfdump --uuid "$DSYM_DIR/$(basename "$m").dSYM" | awk '{print $2}')" ] \
+      || { echo "FATAL: the symbols written for ${m#"$APP"/} do not match it"; exit 1; }
+  done
+  echo "debug symbols kept: $DSYM_DIR ($(ls "$DSYM_DIR" | wc -l | tr -d ' ') bundles; local only, never published)"
+else
+  echo "(debug symbols not kept: --with-dsym or a Developer ID build keeps them)"
+fi
 STRIP_FAIL=0
 for m in "${ALL_MACHO[@]}"; do
   chmod u+w "$m" 2>/dev/null || true
