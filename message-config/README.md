@@ -13,12 +13,15 @@ small file per message under [`messages/`](messages), named
 
 ```sh
 python3 assemble.py          # regenerates messages.json (validates as it goes)
-python3 assemble.py --check  # validate only
+python3 assemble.py --check  # validate, and fail if messages.json is out of date
 ```
 
-On GitHub a workflow runs `assemble.py` automatically on every push, so in
-practice you just add/delete a file in `messages/` and commit. Small per-message
-files keep diffs clean and the set readable no matter how many there are.
+**Assembling is a manual step.** GitHub Actions are disabled on this
+repository, so nothing runs `assemble.py` for you: a message added under
+`messages/` reaches nobody until you run it and commit `messages.json` in the
+same change. `make test` runs the `--check` form and fails when the two
+differ; it never rewrites the file. Small per-message files keep diffs clean
+and the set readable no matter how many there are.
 
 ## How the launcher uses it
 

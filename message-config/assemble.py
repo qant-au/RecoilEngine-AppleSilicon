@@ -10,7 +10,8 @@ Runs on the maintainer's machine or CI (python3, no third-party deps); the
 LAUNCHER never runs this — it just reads the assembled JSON.
 
 Usage: python3 assemble.py            # writes messages.json, validates
-       python3 assemble.py --check    # validate only, non-zero on error
+       python3 assemble.py --check    # validate, and fail if messages.json is
+                                      # not the assembly of messages/; writes nothing
 """
 import json, sys, pathlib
 
@@ -46,10 +47,18 @@ def main():
         print("\n".join("ERROR " + e for e in errors), file=sys.stderr)
         sys.exit(1)
     doc = {"schema": 1, "messages": messages}
+    text = json.dumps(doc, indent=2) + "\n"
     if check_only:
-        print(f"ok: {len(messages)} message(s) valid")
+        # messages.json is what every installed copy fetches. It must be the
+        # assembly of messages/ exactly: a message added without assembling
+        # reaches nobody, and a stale file can keep showing a deleted one.
+        if not OUT.exists() or OUT.read_text() != text:
+            print(f"ERROR {OUT.name} is not the assembly of {SRC.name}/: "
+                  "run assemble.py and commit the result", file=sys.stderr)
+            sys.exit(1)
+        print(f"ok: {len(messages)} message(s) valid, {OUT.name} is up to date")
         return
-    OUT.write_text(json.dumps(doc, indent=2) + "\n")
+    OUT.write_text(text)
     print(f"wrote {OUT.name}: {len(messages)} message(s) from {len(files)} file(s)")
 
 if __name__ == "__main__":

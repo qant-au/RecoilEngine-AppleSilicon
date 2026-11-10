@@ -124,10 +124,11 @@ run "$WORK/wrongschema.json" 0.1 "$WORK/none-e" >/dev/null; [ "$RC" = 0 ] && ok 
 
 # ---------- assembler + shipped example ---------------------------------------
 echo "== assembler + shipped example =="
-if python3 "$PKG/../message-config/assemble.py" --check >/dev/null 2>&1; then ok "assemble.py validates messages/*.jsonc"; else bad "assemble validate"; fi
-python3 "$PKG/../message-config/assemble.py" >/dev/null 2>&1
+# --check writes nothing: a test run must never regenerate the tracked file that
+# every installed copy fetches (a draft under messages/ would go out with it)
+if python3 "$PKG/../message-config/assemble.py" --check >/dev/null 2>&1; then ok "messages/*.jsonc are valid and messages.json is their assembly"; else bad "assemble check" "run message-config/assemble.py and commit messages.json"; fi
 ex=$("$BIN" --config-url "file://$PKG/../message-config/messages.json" --app-version 0.1 --seen-file "$WORK/none-g" --dry-run 2>/dev/null | awk '/^SHOW/{c++} END{print c+0}')
-[ "$ex" -ge 1 ] && ok "assembled messages.json parses and targets v0.1 ($ex message(s))" || bad "example parse" "shown=$ex"
+[ "$ex" -ge 1 ] && ok "tracked messages.json parses and targets v0.1 ($ex message(s))" || bad "example parse" "shown=$ex"
 
 # ---------- all comparison operators -----------------------------------------
 echo "== comparison operators =="
@@ -185,7 +186,11 @@ python3 "$AT/assemble.py" --check >/dev/null 2>&1; [ $? = 1 ] && ok "duplicate i
 rm "$AT/messages/b.jsonc"; printf '{ not json' > "$AT/messages/c.jsonc"
 python3 "$AT/assemble.py" --check >/dev/null 2>&1; [ $? = 1 ] && ok "invalid JSON rejected" || bad "bad json"
 rm "$AT/messages/c.jsonc"
-python3 "$AT/assemble.py" --check >/dev/null 2>&1 && ok "clean set validates" || bad "clean validate"
+python3 "$AT/assemble.py" --check >/dev/null 2>&1; [ $? = 1 ] && ok "valid set with no assembled file rejected" || bad "missing assembly"
+python3 "$AT/assemble.py" >/dev/null 2>&1
+python3 "$AT/assemble.py" --check >/dev/null 2>&1 && ok "clean set validates once assembled" || bad "clean validate"
+echo '{"id":"d","target":{"op":"all"},"title":"t","body":"<p/>"}' > "$AT/messages/d.jsonc"
+python3 "$AT/assemble.py" --check >/dev/null 2>&1; [ $? = 1 ] && ok "message added without assembling rejected" || bad "stale assembly"
 
 # ---------- transport hardening ----------------------------------------------
 echo "== transport hardening =="
