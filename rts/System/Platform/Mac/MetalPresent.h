@@ -68,7 +68,7 @@ void  MacMetalPresent_PresentIOSurface(bool flipY);
 // srcRGBA: byte order of the packed pixels. Returns false if the wrap or
 // pipeline setup failed (caller should fall back to the IOSurface path).
 bool MacMetalPresent_PresentPixelBuffer(void* base, size_t len, int w, int h,
-                                        bool srcRGBA, bool flipY);
+										bool srcRGBA, bool flipY);
 
 // Drop all cached MTLBuffer wraps after draining in-flight presents. MUST be
 // called before the caller unmaps/deletes the underlying PBOs (resize).

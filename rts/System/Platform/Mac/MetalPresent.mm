@@ -37,7 +37,7 @@ static std::vector<uint8_t> g_flipBuf;
 // the IOSurface-backed texture and writes it Y-flipped to the drawable.
 // Double-buffered: main thread writes slot A while the async present of
 // slot B is still in flight. nextDrawable can block ~1.5 vsync (measured
-// 12ms — it paced light scenes to exactly 60 on the 120Hz panel), so the
+// 12ms - it paced light scenes to exactly 60 on the 120Hz panel), so the
 // whole present runs on a serial queue off the main thread.
 #define IO_SLOTS 2
 static IOSurfaceRef               g_ioSurface[IO_SLOTS] = { nullptr, nullptr };
@@ -55,7 +55,7 @@ static id<MTLSamplerState>        g_linearSampler   = nil;
 
 // Path 3: direct pixel-buffer present. MTLBuffer wraps of the engine's
 // persistently-mapped PBO ring, cached by base address (newBufferWithBytesNoCopy
-// is not free — wrap once, reuse every frame).
+// is not free - wrap once, reuse every frame).
 #define PB_WRAP_MAX 8
 static struct { void* base; size_t len; id<MTLBuffer> buf; } g_pbWraps[PB_WRAP_MAX];
 static int                        g_pbWrapCount     = 0;
@@ -79,91 +79,91 @@ static bool                       g_fxBroken   = false; // creation failed: stop
 
 extern "C" void MacMetalPresent_SetUpscaler(int mode)
 {
-    g_fxMode.store(mode, std::memory_order_relaxed);
+	g_fxMode.store(mode, std::memory_order_relaxed);
 }
 
 #ifdef MAC_HAVE_METALFX
 static void ReleaseFx()
 {
-    [g_fxScaler release]; g_fxScaler = nil;
-    [g_fxIn release];     g_fxIn     = nil;
-    [g_fxOut release];    g_fxOut    = nil;
-    g_fxInW = g_fxInH = g_fxOutW = g_fxOutH = 0;
-    g_fxFmt = MTLPixelFormatInvalid;
+	[g_fxScaler release]; g_fxScaler = nil;
+	[g_fxIn release];     g_fxIn     = nil;
+	[g_fxOut release];    g_fxOut    = nil;
+	g_fxInW = g_fxInH = g_fxOutW = g_fxOutH = 0;
+	g_fxFmt = MTLPixelFormatInvalid;
 }
 
 // Returns true when a MetalFX upscale from inW x inH to outW x outH should be
 // encoded this frame (scaler + g_fxOut + g_fxIn ready). Present queue only.
 static bool EnsureFx(int inW, int inH, MTLPixelFormat fmt, int outW, int outH)
 {
-    if (g_fxMode.load(std::memory_order_relaxed) != 1 || g_fxBroken)
-        return false;
-    // MetalFX spatial only upscales; at 1:1 (MacRenderScale=1) it is pure cost
-    if (inW <= 0 || inH <= 0 || inW >= outW || inH >= outH)
-        return false;
-    if (g_fxScaler != nil && inW == g_fxInW && inH == g_fxInH &&
-        outW == g_fxOutW && outH == g_fxOutH && fmt == g_fxFmt)
-        return true;
+	if (g_fxMode.load(std::memory_order_relaxed) != 1 || g_fxBroken)
+		return false;
+	// MetalFX spatial only upscales; at 1:1 (MacRenderScale=1) it is pure cost
+	if (inW <= 0 || inH <= 0 || inW >= outW || inH >= outH)
+		return false;
+	if (g_fxScaler != nil && inW == g_fxInW && inH == g_fxInH &&
+		outW == g_fxOutW && outH == g_fxOutH && fmt == g_fxFmt)
+		return true;
 
-    ReleaseFx();
-    if (![MTLFXSpatialScalerDescriptor supportsDevice:g_device]) {
-        fprintf(stderr, "[MetalPresent] MetalFX spatial scaler not supported on this device; using plain stretch\n");
-        g_fxBroken = true;
-        return false;
-    }
+	ReleaseFx();
+	if (![MTLFXSpatialScalerDescriptor supportsDevice:g_device]) {
+		fprintf(stderr, "[MetalPresent] MetalFX spatial scaler not supported on this device; using plain stretch\n");
+		g_fxBroken = true;
+		return false;
+	}
 
-    MTLFXSpatialScalerDescriptor* d = [[MTLFXSpatialScalerDescriptor alloc] init];
-    d.inputWidth          = (NSUInteger)inW;
-    d.inputHeight         = (NSUInteger)inH;
-    d.outputWidth         = (NSUInteger)outW;
-    d.outputHeight        = (NSUInteger)outH;
-    d.colorTextureFormat  = fmt;
-    d.outputTextureFormat = fmt;
-    // engine output is 8-bit sRGB-encoded (never linear)
-    d.colorProcessingMode = MTLFXSpatialScalerColorProcessingModePerceptual;
-    g_fxScaler = [d newSpatialScalerWithDevice:g_device];
-    [d release];
-    if (g_fxScaler == nil) {
-        fprintf(stderr, "[MetalPresent] MetalFX scaler creation failed (%dx%d -> %dx%d); using plain stretch\n",
-                inW, inH, outW, outH);
-        g_fxBroken = true;
-        return false;
-    }
+	MTLFXSpatialScalerDescriptor* d = [[MTLFXSpatialScalerDescriptor alloc] init];
+	d.inputWidth          = (NSUInteger)inW;
+	d.inputHeight         = (NSUInteger)inH;
+	d.outputWidth         = (NSUInteger)outW;
+	d.outputHeight        = (NSUInteger)outH;
+	d.colorTextureFormat  = fmt;
+	d.outputTextureFormat = fmt;
+	// engine output is 8-bit sRGB-encoded (never linear)
+	d.colorProcessingMode = MTLFXSpatialScalerColorProcessingModePerceptual;
+	g_fxScaler = [d newSpatialScalerWithDevice:g_device];
+	[d release];
+	if (g_fxScaler == nil) {
+		fprintf(stderr, "[MetalPresent] MetalFX scaler creation failed (%dx%d -> %dx%d); using plain stretch\n",
+				inW, inH, outW, outH);
+		g_fxBroken = true;
+		return false;
+	}
 
-    MTLTextureDescriptor* td =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt width:(NSUInteger)outW
-                                                          height:(NSUInteger)outH mipmapped:NO];
-    td.storageMode = MTLStorageModePrivate;
-    td.usage       = g_fxScaler.outputTextureUsage | MTLTextureUsageShaderRead;
-    g_fxOut = [g_device newTextureWithDescriptor:td];
+	MTLTextureDescriptor* td =
+		[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt width:(NSUInteger)outW
+														  height:(NSUInteger)outH mipmapped:NO];
+	td.storageMode = MTLStorageModePrivate;
+	td.usage       = g_fxScaler.outputTextureUsage | MTLTextureUsageShaderRead;
+	g_fxOut = [g_device newTextureWithDescriptor:td];
 
-    MTLTextureDescriptor* inDesc =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt width:(NSUInteger)inW
-                                                          height:(NSUInteger)inH mipmapped:NO];
-    inDesc.storageMode = MTLStorageModePrivate;
-    inDesc.usage       = g_fxScaler.colorTextureUsage | MTLTextureUsageShaderRead;
-    g_fxIn = [g_device newTextureWithDescriptor:inDesc];
+	MTLTextureDescriptor* inDesc =
+		[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt width:(NSUInteger)inW
+														  height:(NSUInteger)inH mipmapped:NO];
+	inDesc.storageMode = MTLStorageModePrivate;
+	inDesc.usage       = g_fxScaler.colorTextureUsage | MTLTextureUsageShaderRead;
+	g_fxIn = [g_device newTextureWithDescriptor:inDesc];
 
-    if (g_fxOut == nil || g_fxIn == nil) {
-        fprintf(stderr, "[MetalPresent] MetalFX texture allocation failed; using plain stretch\n");
-        ReleaseFx();
-        g_fxBroken = true;
-        return false;
-    }
-    g_fxInW = inW; g_fxInH = inH; g_fxOutW = outW; g_fxOutH = outH; g_fxFmt = fmt;
-    fprintf(stderr, "[MetalPresent] MetalFX spatial upscale active: %dx%d -> %dx%d\n", inW, inH, outW, outH);
-    return true;
+	if (g_fxOut == nil || g_fxIn == nil) {
+		fprintf(stderr, "[MetalPresent] MetalFX texture allocation failed; using plain stretch\n");
+		ReleaseFx();
+		g_fxBroken = true;
+		return false;
+	}
+	g_fxInW = inW; g_fxInH = inH; g_fxOutW = outW; g_fxOutH = outH; g_fxFmt = fmt;
+	fprintf(stderr, "[MetalPresent] MetalFX spatial upscale active: %dx%d -> %dx%d\n", inW, inH, outW, outH);
+	return true;
 }
 
 // Encode the upscale of `src` (inW x inH, already in g_fxIn's format) into
 // g_fxOut. `src` may be g_fxIn itself.
 static void EncodeFx(id<MTLCommandBuffer> cb, id<MTLTexture> src)
 {
-    g_fxScaler.colorTexture       = src;
-    g_fxScaler.outputTexture      = g_fxOut;
-    g_fxScaler.inputContentWidth  = (NSUInteger)g_fxInW;
-    g_fxScaler.inputContentHeight = (NSUInteger)g_fxInH;
-    [g_fxScaler encodeToCommandBuffer:cb];
+	g_fxScaler.colorTexture       = src;
+	g_fxScaler.outputTexture      = g_fxOut;
+	g_fxScaler.inputContentWidth  = (NSUInteger)g_fxInW;
+	g_fxScaler.inputContentHeight = (NSUInteger)g_fxInH;
+	[g_fxScaler encodeToCommandBuffer:cb];
 }
 #endif
 
@@ -174,125 +174,125 @@ static NSString* const kPresentShaderSrc = @R"(
 using namespace metal;
 
 struct VOut {
-    float4 position [[position]];
-    float2 uv;
+	float4 position [[position]];
+	float2 uv;
 };
 
 vertex VOut vs_present(uint vid [[vertex_id]]) {
-    // Fullscreen triangle covering NDC [-1,1]^2 with UVs [0,1]^2.
-    const float2 pos[3] = { float2(-1.0,  3.0), float2(-1.0, -1.0), float2( 3.0, -1.0) };
-    const float2 uv [3] = { float2( 0.0, -1.0), float2( 0.0,  1.0), float2( 2.0,  1.0) };
-    VOut o;
-    o.position = float4(pos[vid], 0.0, 1.0);
-    o.uv = uv[vid];
-    return o;
+	// Fullscreen triangle covering NDC [-1,1]^2 with UVs [0,1]^2.
+	const float2 pos[3] = { float2(-1.0,  3.0), float2(-1.0, -1.0), float2( 3.0, -1.0) };
+	const float2 uv [3] = { float2( 0.0, -1.0), float2( 0.0,  1.0), float2( 2.0,  1.0) };
+	VOut o;
+	o.position = float4(pos[vid], 0.0, 1.0);
+	o.uv = uv[vid];
+	return o;
 }
 
 vertex VOut vs_present_flip(uint vid [[vertex_id]]) {
-    // Same triangle but with V flipped at the source side.
-    const float2 pos[3] = { float2(-1.0,  3.0), float2(-1.0, -1.0), float2( 3.0, -1.0) };
-    const float2 uv [3] = { float2( 0.0,  2.0), float2( 0.0,  0.0), float2( 2.0,  0.0) };
-    VOut o;
-    o.position = float4(pos[vid], 0.0, 1.0);
-    o.uv = uv[vid];
-    return o;
+	// Same triangle but with V flipped at the source side.
+	const float2 pos[3] = { float2(-1.0,  3.0), float2(-1.0, -1.0), float2( 3.0, -1.0) };
+	const float2 uv [3] = { float2( 0.0,  2.0), float2( 0.0,  0.0), float2( 2.0,  0.0) };
+	VOut o;
+	o.position = float4(pos[vid], 0.0, 1.0);
+	o.uv = uv[vid];
+	return o;
 }
 
 fragment float4 fs_present(VOut in [[stage_in]],
-                           texture2d<float> src [[texture(0)]],
-                           sampler           s   [[sampler(0)]]) {
-    return src.sample(s, in.uv);
+						   texture2d<float> src [[texture(0)]],
+						   sampler           s   [[sampler(0)]]) {
+	return src.sample(s, in.uv);
 }
 
 // Direct pixel-buffer variant: reads the packed frame straight from the
-// engine's persistently-mapped PIXEL_PACK buffer (unified memory) — the
+// engine's persistently-mapped PIXEL_PACK buffer (unified memory) - the
 // buffer analog of a nearest-neighbor sample. uv carries the same flip
 // semantics as the texture path (vs_present / vs_present_flip).
 struct BufSrc {
-    uint w;
-    uint h;
-    uint rgba; // 1 = bytes are R,G,B,A; 0 = B,G,R,A
+	uint w;
+	uint h;
+	uint rgba; // 1 = bytes are R,G,B,A; 0 = B,G,R,A
 };
 
 fragment float4 fs_present_buf(VOut in [[stage_in]],
-                               device const uchar4* px  [[buffer(0)]],
-                               constant BufSrc&     src [[buffer(1)]]) {
-    const float2 uvc = clamp(in.uv, 0.0, 1.0);
-    const uint x = min(uint(uvc.x * float(src.w)), src.w - 1u);
-    const uint y = min(uint(uvc.y * float(src.h)), src.h - 1u);
-    const uchar4 c = px[y * src.w + x];
-    const float4 f = float4(c) * (1.0 / 255.0);
-    return (src.rgba != 0u) ? float4(f.rgb, f.a) : float4(f.b, f.g, f.r, f.a);
+							   device const uchar4* px  [[buffer(0)]],
+							   constant BufSrc&     src [[buffer(1)]]) {
+	const float2 uvc = clamp(in.uv, 0.0, 1.0);
+	const uint x = min(uint(uvc.x * float(src.w)), src.w - 1u);
+	const uint y = min(uint(uvc.y * float(src.h)), src.h - 1u);
+	const uchar4 c = px[y * src.w + x];
+	const float4 f = float4(c) * (1.0 / 255.0);
+	return (src.rgba != 0u) ? float4(f.rgb, f.a) : float4(f.b, f.g, f.r, f.a);
 }
 )";
 
 static bool BuildPresentPipelines()
 {
-    if (g_presentPSO != nil && g_presentPSO_flip != nil)
-        return true;
+	if (g_presentPSO != nil && g_presentPSO_flip != nil)
+		return true;
 
-    NSError* err = nil;
-    id<MTLLibrary> lib = [g_device newLibraryWithSource:kPresentShaderSrc options:nil error:&err];
-    if (lib == nil) {
-        fprintf(stderr, "[MetalPresent] shader compile failed: %s\n",
-                err ? [[err localizedDescription] UTF8String] : "(no error)");
-        return false;
-    }
-    id<MTLFunction> vs     = [lib newFunctionWithName:@"vs_present"];
-    id<MTLFunction> vsFlip = [lib newFunctionWithName:@"vs_present_flip"];
-    id<MTLFunction> fs     = [lib newFunctionWithName:@"fs_present"];
-    if (vs == nil || vsFlip == nil || fs == nil) {
-        fprintf(stderr, "[MetalPresent] shader function lookup failed\n");
-        return false;
-    }
+	NSError* err = nil;
+	id<MTLLibrary> lib = [g_device newLibraryWithSource:kPresentShaderSrc options:nil error:&err];
+	if (lib == nil) {
+		fprintf(stderr, "[MetalPresent] shader compile failed: %s\n",
+				err ? [[err localizedDescription] UTF8String] : "(no error)");
+		return false;
+	}
+	id<MTLFunction> vs     = [lib newFunctionWithName:@"vs_present"];
+	id<MTLFunction> vsFlip = [lib newFunctionWithName:@"vs_present_flip"];
+	id<MTLFunction> fs     = [lib newFunctionWithName:@"fs_present"];
+	if (vs == nil || vsFlip == nil || fs == nil) {
+		fprintf(stderr, "[MetalPresent] shader function lookup failed\n");
+		return false;
+	}
 
-    auto makePSO = [&](id<MTLFunction> vertFn) -> id<MTLRenderPipelineState> {
-        MTLRenderPipelineDescriptor* d = [[MTLRenderPipelineDescriptor alloc] init];
-        d.vertexFunction   = vertFn;
-        d.fragmentFunction = fs;
-        d.colorAttachments[0].pixelFormat = g_layer.pixelFormat;
-        d.colorAttachments[0].blendingEnabled = NO;
-        NSError* e = nil;
-        id<MTLRenderPipelineState> p = [g_device newRenderPipelineStateWithDescriptor:d error:&e];
-        if (p == nil)
-            fprintf(stderr, "[MetalPresent] PSO build failed: %s\n",
-                    e ? [[e localizedDescription] UTF8String] : "(no error)");
-        return p;
-    };
+	auto makePSO = [&](id<MTLFunction> vertFn) -> id<MTLRenderPipelineState> {
+		MTLRenderPipelineDescriptor* d = [[MTLRenderPipelineDescriptor alloc] init];
+		d.vertexFunction   = vertFn;
+		d.fragmentFunction = fs;
+		d.colorAttachments[0].pixelFormat = g_layer.pixelFormat;
+		d.colorAttachments[0].blendingEnabled = NO;
+		NSError* e = nil;
+		id<MTLRenderPipelineState> p = [g_device newRenderPipelineStateWithDescriptor:d error:&e];
+		if (p == nil)
+			fprintf(stderr, "[MetalPresent] PSO build failed: %s\n",
+					e ? [[e localizedDescription] UTF8String] : "(no error)");
+		return p;
+	};
 
-    g_presentPSO      = makePSO(vs);
-    g_presentPSO_flip = makePSO(vsFlip);
+	g_presentPSO      = makePSO(vs);
+	g_presentPSO_flip = makePSO(vsFlip);
 
-    id<MTLFunction> fsBuf = [lib newFunctionWithName:@"fs_present_buf"];
-    if (fsBuf != nil) {
-        auto makeBufPSO = [&](id<MTLFunction> vertFn) -> id<MTLRenderPipelineState> {
-            MTLRenderPipelineDescriptor* d = [[MTLRenderPipelineDescriptor alloc] init];
-            d.vertexFunction   = vertFn;
-            d.fragmentFunction = fsBuf;
-            d.colorAttachments[0].pixelFormat = g_layer.pixelFormat;
-            d.colorAttachments[0].blendingEnabled = NO;
-            NSError* e = nil;
-            id<MTLRenderPipelineState> p = [g_device newRenderPipelineStateWithDescriptor:d error:&e];
-            if (p == nil)
-                fprintf(stderr, "[MetalPresent] buffer-present PSO build failed: %s\n",
-                        e ? [[e localizedDescription] UTF8String] : "(no error)");
-            return p;
-        };
-        g_pbPSO      = makeBufPSO(vs);
-        g_pbPSO_flip = makeBufPSO(vsFlip);
-    }
+	id<MTLFunction> fsBuf = [lib newFunctionWithName:@"fs_present_buf"];
+	if (fsBuf != nil) {
+		auto makeBufPSO = [&](id<MTLFunction> vertFn) -> id<MTLRenderPipelineState> {
+			MTLRenderPipelineDescriptor* d = [[MTLRenderPipelineDescriptor alloc] init];
+			d.vertexFunction   = vertFn;
+			d.fragmentFunction = fsBuf;
+			d.colorAttachments[0].pixelFormat = g_layer.pixelFormat;
+			d.colorAttachments[0].blendingEnabled = NO;
+			NSError* e = nil;
+			id<MTLRenderPipelineState> p = [g_device newRenderPipelineStateWithDescriptor:d error:&e];
+			if (p == nil)
+				fprintf(stderr, "[MetalPresent] buffer-present PSO build failed: %s\n",
+						e ? [[e localizedDescription] UTF8String] : "(no error)");
+			return p;
+		};
+		g_pbPSO      = makeBufPSO(vs);
+		g_pbPSO_flip = makeBufPSO(vsFlip);
+	}
 
-    MTLSamplerDescriptor* sd = [[MTLSamplerDescriptor alloc] init];
-    sd.minFilter = MTLSamplerMinMagFilterNearest;
-    sd.magFilter = MTLSamplerMinMagFilterNearest;
-    sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
-    sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
-    g_linearSampler = [g_device newSamplerStateWithDescriptor:sd];
+	MTLSamplerDescriptor* sd = [[MTLSamplerDescriptor alloc] init];
+	sd.minFilter = MTLSamplerMinMagFilterNearest;
+	sd.magFilter = MTLSamplerMinMagFilterNearest;
+	sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
+	sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
+	g_linearSampler = [g_device newSamplerStateWithDescriptor:sd];
 
-    return (g_presentPSO != nil && g_presentPSO_flip != nil && g_linearSampler != nil);
+	return (g_presentPSO != nil && g_presentPSO_flip != nil && g_linearSampler != nil);
 }
 
-// Benchmark pin, parsed once. Perf-test only — see the block in
+// Benchmark pin, parsed once. Perf-test only - see the block in
 // MacMetalPresent_Init for what it pins and why.
 static bool PerfPinActive()
 {
@@ -352,19 +352,19 @@ bool MacMetalPresent_Init(void* caMetalLayer)
 	g_layer.framebufferOnly  = NO; // allow the drawable to be a blit destination
 	// nextDrawable was pacing light scenes to exactly refresh/2 (60 on the
 	// 120Hz panel, metal-submit ~12ms): make the pool depth explicit.
-	// displaySync stays ON — this only deepens buffering, never tears.
+	// displaySync stays ON - this only deepens buffering, never tears.
 	g_layer.maximumDrawableCount = 3;
 
 	// ---- BENCHMARK PINS (SPRING_MAC_PERF_PIN=1) -----------------------------
 	// Perf-test only. A benchmark number must not be a function of which
-	// monitor is attached, and by default it is — in three ways that all land
+	// monitor is attached, and by default it is - in three ways that all land
 	// on THIS layer:
 	//
 	//   1. displaySyncEnabled defaults to YES, so presents are paced by the
 	//      panel's refresh. Measured 2026-08-07: a 60Hz panel produced
 	//      maxFps=30.0 (exactly refresh/2, the artifact the comment above
 	//      describes at 60 on a 120Hz panel) and a steady 18.9 fps sitting on
-	//      60/3. The engine's SDL_GL_SetSwapInterval(0) does NOT reach here —
+	//      60/3. The engine's SDL_GL_SetSwapInterval(0) does NOT reach here -
 	//      under EGL_PLATFORM=surfaceless eglSwapBuffers "presents nowhere"
 	//      (MacPresentBackend.mm) and this manual Metal path is the only
 	//      present. So vsync was effectively ON for every perf run ever taken.
@@ -374,14 +374,14 @@ bool MacMetalPresent_Init(void* caMetalLayer)
 	//   3. EDR is left implicit. It happens to be off, but "happens to be" is
 	//      what this whole block exists to eliminate.
 	//
-	// Tearing is expected and fine here — nothing watches a benchmark. Never
+	// Tearing is expected and fine here - nothing watches a benchmark. Never
 	// enable this for play; it is opt-in via env for exactly that reason.
 	if (PerfPinActive()) {
 		g_layer.displaySyncEnabled = NO;   // free-running: refresh rate cannot cap fps
 		g_layer.wantsExtendedDynamicRangeContent = NO;  // explicit SDR, never inferred
 		// contentsScale comes from NSWindow.backingScaleFactor (AttachMetalLayer),
-		// so the PRESENT target — bounds * contentsScale, see
-		// EnsureLayerDrawableSize — still doubles on a 2x monitor even when the
+		// so the PRESENT target - bounds * contentsScale, see
+		// EnsureLayerDrawableSize - still doubles on a 2x monitor even when the
 		// RENDER size is pinned. Pin it to 1.0 so the present blit is sized in
 		// points, not backing pixels. EnsureLayerDrawableSize enforces the same
 		// value independently, in case AppKit re-derives contentsScale on a
@@ -389,7 +389,7 @@ bool MacMetalPresent_Init(void* caMetalLayer)
 		g_layer.contentsScale = 1.0;
 		// 8-bit is already guaranteed upstream (EGL config is hard-coded
 		// 8/8/8/8 and every readback is GL_UNSIGNED_BYTE); pixelFormat above
-		// is BGRA8Unorm. Pinning the colorspace is the missing half — it makes
+		// is BGRA8Unorm. Pinning the colorspace is the missing half - it makes
 		// the compositor's conversion a fixed, defined input instead of a
 		// per-monitor one.
 		// Guarded: spring-headless compiles this file but does not link
@@ -448,7 +448,7 @@ void MacMetalPresent_PresentBGRA(int w, int h, const void* pixels, bool flipY)
 
 	id<CAMetalDrawable> drawable = [g_layer nextDrawable];
 	if (drawable == nil) {
-		fprintf(stderr, "[MetalPresent] nextDrawable returned nil — frame not presented\n");
+		fprintf(stderr, "[MetalPresent] nextDrawable returned nil - frame not presented\n");
 		return;
 	}
 
@@ -470,22 +470,22 @@ void MacMetalPresent_PresentBGRA(int w, int h, const void* pixels, bool flipY)
 
 static void ReleaseIOSurfaceBacking()
 {
-    if (g_ioLocked && g_ioSurface[g_ioCur]) {
-        IOSurfaceUnlock(g_ioSurface[g_ioCur], 0, nullptr);
-        g_ioLocked = false;
-    }
-    for (int i = 0; i < IO_SLOTS; ++i) {
-        // owned (new...): a present block still in flight holds its own retain
-        [g_ioTexture[i] release];
-        g_ioTexture[i] = nil;
-        if (g_ioSurface[i]) {
-            CFRelease(g_ioSurface[i]);
-            g_ioSurface[i] = nullptr;
-        }
-    }
-    g_ioCur = 0;
-    g_ioW = 0;
-    g_ioH = 0;
+	if (g_ioLocked && g_ioSurface[g_ioCur]) {
+		IOSurfaceUnlock(g_ioSurface[g_ioCur], 0, nullptr);
+		g_ioLocked = false;
+	}
+	for (int i = 0; i < IO_SLOTS; ++i) {
+		// owned (new...): a present block still in flight holds its own retain
+		[g_ioTexture[i] release];
+		g_ioTexture[i] = nil;
+		if (g_ioSurface[i]) {
+			CFRelease(g_ioSurface[i]);
+			g_ioSurface[i] = nullptr;
+		}
+	}
+	g_ioCur = 0;
+	g_ioW = 0;
+	g_ioH = 0;
 }
 
 static void EnsurePresentQueue(); // defined with the direct-present path below
@@ -497,378 +497,378 @@ static bool g_ioIsRGBA  = false; // order the current backing was created with
 
 extern "C" void MacMetalPresent_SetSourceRGBA(int rgba)
 {
-    g_ioSrcRGBA = (rgba != 0);
+	g_ioSrcRGBA = (rgba != 0);
 }
 
 static bool EnsureIOSurfaceBacking(int w, int h)
 {
-    if (g_ioSurface[0] && g_ioW == w && g_ioH == h && g_ioIsRGBA == g_ioSrcRGBA)
-        return true;
+	if (g_ioSurface[0] && g_ioW == w && g_ioH == h && g_ioIsRGBA == g_ioSrcRGBA)
+		return true;
 
-    ReleaseIOSurfaceBacking();
+	ReleaseIOSurfaceBacking();
 
-    NSDictionary* props = @{
-        (id)kIOSurfaceWidth:           @(w),
-        (id)kIOSurfaceHeight:          @(h),
-        (id)kIOSurfaceBytesPerElement: @(4),
-        (id)kIOSurfacePixelFormat:     @((uint32_t)(g_ioSrcRGBA ? 'RGBA' : 'BGRA')),
-    };
-    MTLTextureDescriptor* d =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:(g_ioSrcRGBA ? MTLPixelFormatRGBA8Unorm
-                                                                              : MTLPixelFormatBGRA8Unorm)
-                                                           width:(NSUInteger)w
-                                                          height:(NSUInteger)h
-                                                       mipmapped:NO];
-    d.usage = MTLTextureUsageShaderRead;
-    d.storageMode = MTLStorageModeShared;
-    for (int i = 0; i < IO_SLOTS; ++i) {
-        g_ioSurface[i] = IOSurfaceCreate((__bridge CFDictionaryRef)props);
-        if (g_ioSurface[i] == nullptr) {
-            fprintf(stderr, "[MetalPresent] IOSurfaceCreate failed (%dx%d)\n", w, h);
-            ReleaseIOSurfaceBacking();
-            return false;
-        }
-        g_ioTexture[i] = [g_device newTextureWithDescriptor:d iosurface:g_ioSurface[i] plane:0];
-        if (g_ioTexture[i] == nil) {
-            fprintf(stderr, "[MetalPresent] newTextureWithDescriptor:iosurface: failed\n");
-            ReleaseIOSurfaceBacking();
-            return false;
-        }
-    }
-    EnsurePresentQueue();
+	NSDictionary* props = @{
+		(id)kIOSurfaceWidth:           @(w),
+		(id)kIOSurfaceHeight:          @(h),
+		(id)kIOSurfaceBytesPerElement: @(4),
+		(id)kIOSurfacePixelFormat:     @((uint32_t)(g_ioSrcRGBA ? 'RGBA' : 'BGRA')),
+	};
+	MTLTextureDescriptor* d =
+		[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:(g_ioSrcRGBA ? MTLPixelFormatRGBA8Unorm
+																			  : MTLPixelFormatBGRA8Unorm)
+														   width:(NSUInteger)w
+														  height:(NSUInteger)h
+													   mipmapped:NO];
+	d.usage = MTLTextureUsageShaderRead;
+	d.storageMode = MTLStorageModeShared;
+	for (int i = 0; i < IO_SLOTS; ++i) {
+		g_ioSurface[i] = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+		if (g_ioSurface[i] == nullptr) {
+			fprintf(stderr, "[MetalPresent] IOSurfaceCreate failed (%dx%d)\n", w, h);
+			ReleaseIOSurfaceBacking();
+			return false;
+		}
+		g_ioTexture[i] = [g_device newTextureWithDescriptor:d iosurface:g_ioSurface[i] plane:0];
+		if (g_ioTexture[i] == nil) {
+			fprintf(stderr, "[MetalPresent] newTextureWithDescriptor:iosurface: failed\n");
+			ReleaseIOSurfaceBacking();
+			return false;
+		}
+	}
+	EnsurePresentQueue();
 
-    g_ioCur = 0;
-    g_ioW = w;
-    g_ioH = h;
-    g_ioIsRGBA = g_ioSrcRGBA;
-    // Drawable size must match the layer's *natural* backing
-    // pixel count, not the IOSurface size. With SPRING_MAC_NO_RETINA the
-    // IOSurface is at logical (1x) res while the layer's backing is Retina
-    // (2x). Setting drawableSize to the smaller IOSurface size makes
-    // CoreAnimation place the drawable at 1:1 in a corner of the layer.
-    const CGSize  lbSize  = g_layer.bounds.size;
-    // Under the benchmark pin the present target is sized in POINTS: AppKit owns
-    // this layer and can re-derive contentsScale from the display, which would
-    // put the monitor's backing scale back into the measured present cost.
-    const CGFloat cs      = PerfPinActive()
-                              ? 1.0
-                              : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
-    const CGFloat targetW = lbSize.width  * cs;
-    const CGFloat targetH = lbSize.height * cs;
-    const CGFloat finalW  = targetW > 0 ? targetW : (CGFloat)w;
-    const CGFloat finalH  = targetH > 0 ? targetH : (CGFloat)h;
-    g_layer.drawableSize = CGSizeMake(finalW, finalH);
-    fprintf(stderr, "[MetalPresent/drawable] IOSurface=%dx%d layer.bounds=%.1fx%.1f pt "
-                    "contentsScale=%.2f -> drawableSize=%.1fx%.1f px\n",
-            w, h, (double)lbSize.width, (double)lbSize.height,
-            (double)cs, (double)finalW, (double)finalH);
-    return true;
+	g_ioCur = 0;
+	g_ioW = w;
+	g_ioH = h;
+	g_ioIsRGBA = g_ioSrcRGBA;
+	// Drawable size must match the layer's *natural* backing
+	// pixel count, not the IOSurface size. With SPRING_MAC_NO_RETINA the
+	// IOSurface is at logical (1x) res while the layer's backing is Retina
+	// (2x). Setting drawableSize to the smaller IOSurface size makes
+	// CoreAnimation place the drawable at 1:1 in a corner of the layer.
+	const CGSize  lbSize  = g_layer.bounds.size;
+	// Under the benchmark pin the present target is sized in POINTS: AppKit owns
+	// this layer and can re-derive contentsScale from the display, which would
+	// put the monitor's backing scale back into the measured present cost.
+	const CGFloat cs      = PerfPinActive()
+							  ? 1.0
+							  : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
+	const CGFloat targetW = lbSize.width  * cs;
+	const CGFloat targetH = lbSize.height * cs;
+	const CGFloat finalW  = targetW > 0 ? targetW : (CGFloat)w;
+	const CGFloat finalH  = targetH > 0 ? targetH : (CGFloat)h;
+	g_layer.drawableSize = CGSizeMake(finalW, finalH);
+	fprintf(stderr, "[MetalPresent/drawable] IOSurface=%dx%d layer.bounds=%.1fx%.1f pt "
+					"contentsScale=%.2f -> drawableSize=%.1fx%.1f px\n",
+			w, h, (double)lbSize.width, (double)lbSize.height,
+			(double)cs, (double)finalW, (double)finalH);
+	return true;
 }
 
 void* MacMetalPresent_AcquireIOSurfaceBuffer(int w, int h, size_t* outRowBytes)
 {
-    if (outRowBytes) *outRowBytes = 0;
-    if (g_device == nil || g_queue == nil || g_layer == nil)
-        return nullptr;
-    if (w <= 0 || h <= 0)
-        return nullptr;
-    if (!EnsureIOSurfaceBacking(w, h))
-        return nullptr;
-    if (!BuildPresentPipelines())
-        return nullptr;
+	if (outRowBytes) *outRowBytes = 0;
+	if (g_device == nil || g_queue == nil || g_layer == nil)
+		return nullptr;
+	if (w <= 0 || h <= 0)
+		return nullptr;
+	if (!EnsureIOSurfaceBacking(w, h))
+		return nullptr;
+	if (!BuildPresentPipelines())
+		return nullptr;
 
-    static bool s_loggedOnce = false;
-    if (!s_loggedOnce) {
-        fprintf(stderr, "[MetalPresent] IOSurface zero-copy path active (%dx%d, rowBytes=%zu, slots=%d)\n",
-                w, h, IOSurfaceGetBytesPerRow(g_ioSurface[0]), IO_SLOTS);
-        s_loggedOnce = true;
-    }
+	static bool s_loggedOnce = false;
+	if (!s_loggedOnce) {
+		fprintf(stderr, "[MetalPresent] IOSurface zero-copy path active (%dx%d, rowBytes=%zu, slots=%d)\n",
+				w, h, IOSurfaceGetBytesPerRow(g_ioSurface[0]), IO_SLOTS);
+		s_loggedOnce = true;
+	}
 
-    // Write into the slot the async present is NOT reading. The IOSurfaceLock
-    // only blocks if the present-before-last still holds a GPU reference —
-    // i.e., backpressure begins at 2 frames of present pipelining.
-    if (IOSurfaceLock(g_ioSurface[g_ioCur], 0, nullptr) != kIOReturnSuccess) {
-        fprintf(stderr, "[MetalPresent] IOSurfaceLock failed\n");
-        return nullptr;
-    }
-    g_ioLocked = true;
+	// Write into the slot the async present is NOT reading. The IOSurfaceLock
+	// only blocks if the present-before-last still holds a GPU reference -
+	// i.e., backpressure begins at 2 frames of present pipelining.
+	if (IOSurfaceLock(g_ioSurface[g_ioCur], 0, nullptr) != kIOReturnSuccess) {
+		fprintf(stderr, "[MetalPresent] IOSurfaceLock failed\n");
+		return nullptr;
+	}
+	g_ioLocked = true;
 
-    const size_t rb = IOSurfaceGetBytesPerRow(g_ioSurface[g_ioCur]);
-    if (outRowBytes) *outRowBytes = rb;
-    return IOSurfaceGetBaseAddress(g_ioSurface[g_ioCur]);
+	const size_t rb = IOSurfaceGetBytesPerRow(g_ioSurface[g_ioCur]);
+	if (outRowBytes) *outRowBytes = rb;
+	return IOSurfaceGetBaseAddress(g_ioSurface[g_ioCur]);
 }
 
 void MacMetalPresent_PresentIOSurface(bool flipY)
 {
-    if (g_device == nil || g_queue == nil || g_layer == nil)
-        return;
-    if (g_ioSurface[g_ioCur] == nullptr || g_ioTexture[g_ioCur] == nil)
-        return;
+	if (g_device == nil || g_queue == nil || g_layer == nil)
+		return;
+	if (g_ioSurface[g_ioCur] == nullptr || g_ioTexture[g_ioCur] == nil)
+		return;
 
-    if (g_ioLocked) {
-        IOSurfaceUnlock(g_ioSurface[g_ioCur], 0, nullptr);
-        g_ioLocked = false;
-    }
+	if (g_ioLocked) {
+		IOSurfaceUnlock(g_ioSurface[g_ioCur], 0, nullptr);
+		g_ioLocked = false;
+	}
 
-    // At most 2 presents queued: if the budget is exhausted the compositor is
-    // behind by two full frames — drop THIS present (the next one shows newer
-    // content anyway; content is never torn because each present reads its
-    // own slot). The main thread never blocks in nextDrawable itself. With
-    // display pacing on (the VSync setting) it waits briefly for a slot first,
-    // so a frame is only dropped when the display is not taking any.
-    if (!TakePresentSlot()) {
-        g_presentSkips++;
-        if ((g_presentSkips & (g_presentSkips - 1)) == 0) // log 1,2,4,8,...
-            fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",
-                    (unsigned long long)g_presentSkips);
-        g_ioCur = (g_ioCur + 1) % IO_SLOTS;
-        return;
-    }
+	// At most 2 presents queued: if the budget is exhausted the compositor is
+	// behind by two full frames - drop THIS present (the next one shows newer
+	// content anyway; content is never torn because each present reads its
+	// own slot). The main thread never blocks in nextDrawable itself. With
+	// display pacing on (the VSync setting) it waits briefly for a slot first,
+	// so a frame is only dropped when the display is not taking any.
+	if (!TakePresentSlot()) {
+		g_presentSkips++;
+		if ((g_presentSkips & (g_presentSkips - 1)) == 0) // log 1,2,4,8,...
+			fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",
+					(unsigned long long)g_presentSkips);
+		g_ioCur = (g_ioCur + 1) % IO_SLOTS;
+		return;
+	}
 
-    id<MTLTexture> tex = g_ioTexture[g_ioCur];
-    id<MTLRenderPipelineState> pso = flipY ? g_presentPSO_flip : g_presentPSO;
-    dispatch_async(g_presentQueue, ^{
-        id<CAMetalDrawable> drawable = [g_layer nextDrawable];
-        if (drawable == nil) {
-            // see the direct-path handler: display transitions produce nil
-            // streaks; rate-limit and re-derive drawableSize to self-heal
-            static uint64_t s_nilStreak = 0;
-            ++s_nilStreak;
-            if ((s_nilStreak & (s_nilStreak - 1)) == 0)
-                fprintf(stderr, "[MetalPresent] nextDrawable nil x%llu (IOSurface path)\n",
-                        (unsigned long long)s_nilStreak);
-            const CGSize  lb = g_layer.bounds.size;
-            const CGFloat cs = PerfPinActive()
-                                 ? 1.0  // benchmark pin: present target in points
-                                 : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
-            if (lb.width > 0 && lb.height > 0)
-                g_layer.drawableSize = CGSizeMake(lb.width * cs, lb.height * cs);
-            dispatch_semaphore_signal(g_presentBudget);
-            return;
-        }
+	id<MTLTexture> tex = g_ioTexture[g_ioCur];
+	id<MTLRenderPipelineState> pso = flipY ? g_presentPSO_flip : g_presentPSO;
+	dispatch_async(g_presentQueue, ^{
+		id<CAMetalDrawable> drawable = [g_layer nextDrawable];
+		if (drawable == nil) {
+			// see the direct-path handler: display transitions produce nil
+			// streaks; rate-limit and re-derive drawableSize to self-heal
+			static uint64_t s_nilStreak = 0;
+			++s_nilStreak;
+			if ((s_nilStreak & (s_nilStreak - 1)) == 0)
+				fprintf(stderr, "[MetalPresent] nextDrawable nil x%llu (IOSurface path)\n",
+						(unsigned long long)s_nilStreak);
+			const CGSize  lb = g_layer.bounds.size;
+			const CGFloat cs = PerfPinActive()
+								 ? 1.0  // benchmark pin: present target in points
+								 : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
+			if (lb.width > 0 && lb.height > 0)
+				g_layer.drawableSize = CGSizeMake(lb.width * cs, lb.height * cs);
+			dispatch_semaphore_signal(g_presentBudget);
+			return;
+		}
 
-        MTLRenderPassDescriptor* rpd = [MTLRenderPassDescriptor renderPassDescriptor];
-        rpd.colorAttachments[0].texture     = drawable.texture;
-        rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
-        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+		MTLRenderPassDescriptor* rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+		rpd.colorAttachments[0].texture     = drawable.texture;
+		rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
+		rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-        id<MTLCommandBuffer> cb = [g_queue commandBuffer];
-        id<MTLTexture> presentTex = tex;
+		id<MTLCommandBuffer> cb = [g_queue commandBuffer];
+		id<MTLTexture> presentTex = tex;
 #ifdef MAC_HAVE_METALFX
-        if (EnsureFx((int)tex.width, (int)tex.height, tex.pixelFormat,
-                     (int)drawable.texture.width, (int)drawable.texture.height)) {
-            id<MTLTexture> fxSrc = tex;
-            if ((tex.usage & g_fxScaler.colorTextureUsage) != g_fxScaler.colorTextureUsage) {
-                // IOSurface texture lacks a usage MetalFX wants: copy first
-                id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-                [blit copyFromTexture:tex toTexture:g_fxIn];
-                [blit endEncoding];
-                fxSrc = g_fxIn;
-            }
-            EncodeFx(cb, fxSrc);
-            presentTex = g_fxOut;
-        }
+		if (EnsureFx((int)tex.width, (int)tex.height, tex.pixelFormat,
+					 (int)drawable.texture.width, (int)drawable.texture.height)) {
+			id<MTLTexture> fxSrc = tex;
+			if ((tex.usage & g_fxScaler.colorTextureUsage) != g_fxScaler.colorTextureUsage) {
+				// IOSurface texture lacks a usage MetalFX wants: copy first
+				id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+				[blit copyFromTexture:tex toTexture:g_fxIn];
+				[blit endEncoding];
+				fxSrc = g_fxIn;
+			}
+			EncodeFx(cb, fxSrc);
+			presentTex = g_fxOut;
+		}
 #endif
-        id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
-        [enc setRenderPipelineState:pso];
-        [enc setFragmentTexture:presentTex atIndex:0];
-        [enc setFragmentSamplerState:g_linearSampler atIndex:0];
-        [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-        [enc endEncoding];
-        [cb presentDrawable:drawable];
-        [cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull c) {
-            dispatch_semaphore_signal(g_presentBudget);
-        }];
-        [cb commit];
-    });
+		id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+		[enc setRenderPipelineState:pso];
+		[enc setFragmentTexture:presentTex atIndex:0];
+		[enc setFragmentSamplerState:g_linearSampler atIndex:0];
+		[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+		[enc endEncoding];
+		[cb presentDrawable:drawable];
+		[cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull c) {
+			dispatch_semaphore_signal(g_presentBudget);
+		}];
+		[cb commit];
+	});
 
-    g_ioCur = (g_ioCur + 1) % IO_SLOTS;
+	g_ioCur = (g_ioCur + 1) % IO_SLOTS;
 }
 
 // ---- Path 3: direct pixel-buffer present -----------------------------------
 
 static void EnsurePresentQueue()
 {
-    if (g_presentQueue == nil) {
-        // the present queue gates what reaches the glass — a default-QoS
-        // queue can be scheduled behind interactive work (same class of gap
-        // as the ThreadPool workers, which measured +5% avg / +30% min on
-        // the sim-bound cell when promoted)
-        dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
-            DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0);
-        g_presentQueue  = dispatch_queue_create("spring.mac.present", attr);
-        g_presentBudget = dispatch_semaphore_create(2);
-    }
+	if (g_presentQueue == nil) {
+		// the present queue gates what reaches the glass - a default-QoS
+		// queue can be scheduled behind interactive work (same class of gap
+		// as the ThreadPool workers, which measured +5% avg / +30% min on
+		// the sim-bound cell when promoted)
+		dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
+			DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INTERACTIVE, 0);
+		g_presentQueue  = dispatch_queue_create("spring.mac.present", attr);
+		g_presentBudget = dispatch_semaphore_create(2);
+	}
 }
 
 // drawableSize must track the layer's natural backing pixel count (see the
-// comment in EnsureIOSurfaceBacking — the direct path never creates an
+// comment in EnsureIOSurfaceBacking - the direct path never creates an
 // IOSurface, so it maintains the drawable size itself).
 static void EnsureLayerDrawableSize(int w, int h)
 {
-    static int s_lastW = -1, s_lastH = -1;
-    if (w == s_lastW && h == s_lastH)
-        return;
-    const CGSize  lbSize  = g_layer.bounds.size;
-    // Under the benchmark pin the present target is sized in POINTS: AppKit owns
-    // this layer and can re-derive contentsScale from the display, which would
-    // put the monitor's backing scale back into the measured present cost.
-    const CGFloat cs      = PerfPinActive()
-                              ? 1.0
-                              : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
-    const CGFloat targetW = lbSize.width  * cs;
-    const CGFloat targetH = lbSize.height * cs;
-    g_layer.drawableSize = CGSizeMake(targetW > 0 ? targetW : (CGFloat)w,
-                                      targetH > 0 ? targetH : (CGFloat)h);
-    s_lastW = w;
-    s_lastH = h;
+	static int s_lastW = -1, s_lastH = -1;
+	if (w == s_lastW && h == s_lastH)
+		return;
+	const CGSize  lbSize  = g_layer.bounds.size;
+	// Under the benchmark pin the present target is sized in POINTS: AppKit owns
+	// this layer and can re-derive contentsScale from the display, which would
+	// put the monitor's backing scale back into the measured present cost.
+	const CGFloat cs      = PerfPinActive()
+							  ? 1.0
+							  : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
+	const CGFloat targetW = lbSize.width  * cs;
+	const CGFloat targetH = lbSize.height * cs;
+	g_layer.drawableSize = CGSizeMake(targetW > 0 ? targetW : (CGFloat)w,
+									  targetH > 0 ? targetH : (CGFloat)h);
+	s_lastW = w;
+	s_lastH = h;
 }
 
 static id<MTLBuffer> WrapPixelBuffer(void* base, size_t len)
 {
-    for (int i = 0; i < g_pbWrapCount; ++i) {
-        if (g_pbWraps[i].base == base && g_pbWraps[i].len == len)
-            return g_pbWraps[i].buf;
-    }
-    if (g_pbWrapCount >= PB_WRAP_MAX) {
-        fprintf(stderr, "[MetalPresent] pixel-buffer wrap cache full (%d) — caller leaking rings?\n", PB_WRAP_MAX);
-        return nil;
-    }
-    id<MTLBuffer> buf = [g_device newBufferWithBytesNoCopy:base
-                                                    length:len
-                                                   options:MTLResourceStorageModeShared
-                                               deallocator:nil]; // owned (+1), released in Invalidate
-    if (buf == nil) {
-        fprintf(stderr, "[MetalPresent] newBufferWithBytesNoCopy rejected ptr=%p len=%zu (page-aligned?)\n", base, len);
-        return nil;
-    }
-    g_pbWraps[g_pbWrapCount++] = { base, len, buf };
-    return buf;
+	for (int i = 0; i < g_pbWrapCount; ++i) {
+		if (g_pbWraps[i].base == base && g_pbWraps[i].len == len)
+			return g_pbWraps[i].buf;
+	}
+	if (g_pbWrapCount >= PB_WRAP_MAX) {
+		fprintf(stderr, "[MetalPresent] pixel-buffer wrap cache full (%d) - caller leaking rings?\n", PB_WRAP_MAX);
+		return nil;
+	}
+	id<MTLBuffer> buf = [g_device newBufferWithBytesNoCopy:base
+													length:len
+												   options:MTLResourceStorageModeShared
+											   deallocator:nil]; // owned (+1), released in Invalidate
+	if (buf == nil) {
+		fprintf(stderr, "[MetalPresent] newBufferWithBytesNoCopy rejected ptr=%p len=%zu (page-aligned?)\n", base, len);
+		return nil;
+	}
+	g_pbWraps[g_pbWrapCount++] = { base, len, buf };
+	return buf;
 }
 
 bool MacMetalPresent_PresentPixelBuffer(void* base, size_t len, int w, int h,
-                                        bool srcRGBA, bool flipY)
+										bool srcRGBA, bool flipY)
 {
-    if (g_device == nil || g_queue == nil || g_layer == nil)
-        return false;
-    if (base == nullptr || w <= 0 || h <= 0 || len < (size_t)w * h * 4)
-        return false;
-    if (!BuildPresentPipelines() || g_pbPSO == nil || g_pbPSO_flip == nil)
-        return false;
+	if (g_device == nil || g_queue == nil || g_layer == nil)
+		return false;
+	if (base == nullptr || w <= 0 || h <= 0 || len < (size_t)w * h * 4)
+		return false;
+	if (!BuildPresentPipelines() || g_pbPSO == nil || g_pbPSO_flip == nil)
+		return false;
 
-    id<MTLBuffer> buf = WrapPixelBuffer(base, len);
-    if (buf == nil)
-        return false;
+	id<MTLBuffer> buf = WrapPixelBuffer(base, len);
+	if (buf == nil)
+		return false;
 
-    EnsurePresentQueue();
-    EnsureLayerDrawableSize(w, h);
+	EnsurePresentQueue();
+	EnsureLayerDrawableSize(w, h);
 
-    static bool s_loggedOnce = false;
-    if (!s_loggedOnce) {
-        fprintf(stderr, "[MetalPresent] DIRECT pixel-buffer present active (%dx%d, %s, no CPU copy)\n",
-                w, h, srcRGBA ? "RGBA" : "BGRA");
-        s_loggedOnce = true;
-    }
+	static bool s_loggedOnce = false;
+	if (!s_loggedOnce) {
+		fprintf(stderr, "[MetalPresent] DIRECT pixel-buffer present active (%dx%d, %s, no CPU copy)\n",
+				w, h, srcRGBA ? "RGBA" : "BGRA");
+		s_loggedOnce = true;
+	}
 
-    // same budget-2 drop policy as the IOSurface path (see PresentIOSurface)
-    if (!TakePresentSlot()) {
-        g_presentSkips++;
-        if ((g_presentSkips & (g_presentSkips - 1)) == 0)
-            fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",
-                    (unsigned long long)g_presentSkips);
-        return true; // frame dropped by policy, not a path failure
-    }
+	// same budget-2 drop policy as the IOSurface path (see PresentIOSurface)
+	if (!TakePresentSlot()) {
+		g_presentSkips++;
+		if ((g_presentSkips & (g_presentSkips - 1)) == 0)
+			fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",
+					(unsigned long long)g_presentSkips);
+		return true; // frame dropped by policy, not a path failure
+	}
 
-    struct { uint32_t w, h, rgba; } bufSrc = { (uint32_t)w, (uint32_t)h, srcRGBA ? 1u : 0u };
-    id<MTLRenderPipelineState> pso = flipY ? g_pbPSO_flip : g_pbPSO;
-    dispatch_async(g_presentQueue, ^{
-        id<CAMetalDrawable> drawable = [g_layer nextDrawable];
-        if (drawable == nil) {
-            // Streaks of nil drawables happen while a display disconnects /
-            // reconnects or the Space animates: rate-limit the log and nudge
-            // the layer's drawableSize from its CURRENT bounds so presentation
-            // self-heals once a display is back (bounds can be zero or stale
-            // for several frames around the transition).
-            static uint64_t s_nilStreak = 0;
-            ++s_nilStreak;
-            if ((s_nilStreak & (s_nilStreak - 1)) == 0)
-                fprintf(stderr, "[MetalPresent] nextDrawable nil x%llu — display transition? re-deriving drawableSize\n",
-                        (unsigned long long)s_nilStreak);
-            const CGSize  lb = g_layer.bounds.size;
-            const CGFloat cs = PerfPinActive()
-                                 ? 1.0  // benchmark pin: present target in points
-                                 : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
-            if (lb.width > 0 && lb.height > 0)
-                g_layer.drawableSize = CGSizeMake(lb.width * cs, lb.height * cs);
-            dispatch_semaphore_signal(g_presentBudget);
-            return;
-        }
-        MTLRenderPassDescriptor* rpd = [MTLRenderPassDescriptor renderPassDescriptor];
-        rpd.colorAttachments[0].texture     = drawable.texture;
-        rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
-        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+	struct { uint32_t w, h, rgba; } bufSrc = { (uint32_t)w, (uint32_t)h, srcRGBA ? 1u : 0u };
+	id<MTLRenderPipelineState> pso = flipY ? g_pbPSO_flip : g_pbPSO;
+	dispatch_async(g_presentQueue, ^{
+		id<CAMetalDrawable> drawable = [g_layer nextDrawable];
+		if (drawable == nil) {
+			// Streaks of nil drawables happen while a display disconnects /
+			// reconnects or the Space animates: rate-limit the log and nudge
+			// the layer's drawableSize from its CURRENT bounds so presentation
+			// self-heals once a display is back (bounds can be zero or stale
+			// for several frames around the transition).
+			static uint64_t s_nilStreak = 0;
+			++s_nilStreak;
+			if ((s_nilStreak & (s_nilStreak - 1)) == 0)
+				fprintf(stderr, "[MetalPresent] nextDrawable nil x%llu - display transition? re-deriving drawableSize\n",
+						(unsigned long long)s_nilStreak);
+			const CGSize  lb = g_layer.bounds.size;
+			const CGFloat cs = PerfPinActive()
+								 ? 1.0  // benchmark pin: present target in points
+								 : (g_layer.contentsScale > 0 ? g_layer.contentsScale : 1.0);
+			if (lb.width > 0 && lb.height > 0)
+				g_layer.drawableSize = CGSizeMake(lb.width * cs, lb.height * cs);
+			dispatch_semaphore_signal(g_presentBudget);
+			return;
+		}
+		MTLRenderPassDescriptor* rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+		rpd.colorAttachments[0].texture     = drawable.texture;
+		rpd.colorAttachments[0].loadAction  = MTLLoadActionDontCare;
+		rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-        id<MTLCommandBuffer> cb = [g_queue commandBuffer];
+		id<MTLCommandBuffer> cb = [g_queue commandBuffer];
 #ifdef MAC_HAVE_METALFX
-        // MetalFX needs a texture: one GPU blit of the packed rows into
-        // g_fxIn (the texture format absorbs the RGBA/BGRA order), upscale,
-        // then present g_fxOut through the texture PSO (same flip semantics).
-        const MTLPixelFormat fxFmt = srcRGBA ? MTLPixelFormatRGBA8Unorm : MTLPixelFormatBGRA8Unorm;
-        if (EnsureFx(w, h, fxFmt, (int)drawable.texture.width, (int)drawable.texture.height)) {
-            id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-            [blit copyFromBuffer:buf
-                    sourceOffset:0
-               sourceBytesPerRow:(NSUInteger)w * 4
-             sourceBytesPerImage:(NSUInteger)w * h * 4
-                      sourceSize:MTLSizeMake((NSUInteger)w, (NSUInteger)h, 1)
-                       toTexture:g_fxIn
-                destinationSlice:0
-                destinationLevel:0
-               destinationOrigin:MTLOriginMake(0, 0, 0)];
-            [blit endEncoding];
-            EncodeFx(cb, g_fxIn);
+		// MetalFX needs a texture: one GPU blit of the packed rows into
+		// g_fxIn (the texture format absorbs the RGBA/BGRA order), upscale,
+		// then present g_fxOut through the texture PSO (same flip semantics).
+		const MTLPixelFormat fxFmt = srcRGBA ? MTLPixelFormatRGBA8Unorm : MTLPixelFormatBGRA8Unorm;
+		if (EnsureFx(w, h, fxFmt, (int)drawable.texture.width, (int)drawable.texture.height)) {
+			id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+			[blit copyFromBuffer:buf
+					sourceOffset:0
+			   sourceBytesPerRow:(NSUInteger)w * 4
+			 sourceBytesPerImage:(NSUInteger)w * h * 4
+					  sourceSize:MTLSizeMake((NSUInteger)w, (NSUInteger)h, 1)
+					   toTexture:g_fxIn
+				destinationSlice:0
+				destinationLevel:0
+			   destinationOrigin:MTLOriginMake(0, 0, 0)];
+			[blit endEncoding];
+			EncodeFx(cb, g_fxIn);
 
-            id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
-            [enc setRenderPipelineState:(flipY ? g_presentPSO_flip : g_presentPSO)];
-            [enc setFragmentTexture:g_fxOut atIndex:0];
-            [enc setFragmentSamplerState:g_linearSampler atIndex:0];
-            [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-            [enc endEncoding];
-        } else
+			id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+			[enc setRenderPipelineState:(flipY ? g_presentPSO_flip : g_presentPSO)];
+			[enc setFragmentTexture:g_fxOut atIndex:0];
+			[enc setFragmentSamplerState:g_linearSampler atIndex:0];
+			[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+			[enc endEncoding];
+		} else
 #endif
-        {
-            id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
-            [enc setRenderPipelineState:pso];
-            [enc setFragmentBuffer:buf offset:0 atIndex:0];
-            [enc setFragmentBytes:&bufSrc length:sizeof(bufSrc) atIndex:1];
-            [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-            [enc endEncoding];
-        }
-        [cb presentDrawable:drawable];
-        [cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull c) {
-            dispatch_semaphore_signal(g_presentBudget);
-        }];
-        [cb commit];
-    });
-    return true;
+		{
+			id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+			[enc setRenderPipelineState:pso];
+			[enc setFragmentBuffer:buf offset:0 atIndex:0];
+			[enc setFragmentBytes:&bufSrc length:sizeof(bufSrc) atIndex:1];
+			[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+			[enc endEncoding];
+		}
+		[cb presentDrawable:drawable];
+		[cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull c) {
+			dispatch_semaphore_signal(g_presentBudget);
+		}];
+		[cb commit];
+	});
+	return true;
 }
 
 void MacMetalPresent_InvalidatePixelBuffers(void)
 {
-    if (g_pbWrapCount == 0)
-        return;
-    // Drain: flush the serial queue (all queued presents committed), then
-    // reclaim both budget slots so no command buffer still references a wrap.
-    if (g_presentQueue != nil) {
-        dispatch_sync(g_presentQueue, ^{});
-        for (int i = 0; i < 2; ++i)
-            dispatch_semaphore_wait(g_presentBudget, dispatch_time(DISPATCH_TIME_NOW, 2ull * NSEC_PER_SEC));
-        for (int i = 0; i < 2; ++i)
-            dispatch_semaphore_signal(g_presentBudget);
-    }
-    for (int i = 0; i < g_pbWrapCount; ++i) {
-        [g_pbWraps[i].buf release];
-        g_pbWraps[i] = { nullptr, 0, nil };
-    }
-    g_pbWrapCount = 0;
+	if (g_pbWrapCount == 0)
+		return;
+	// Drain: flush the serial queue (all queued presents committed), then
+	// reclaim both budget slots so no command buffer still references a wrap.
+	if (g_presentQueue != nil) {
+		dispatch_sync(g_presentQueue, ^{});
+		for (int i = 0; i < 2; ++i)
+			dispatch_semaphore_wait(g_presentBudget, dispatch_time(DISPATCH_TIME_NOW, 2ull * NSEC_PER_SEC));
+		for (int i = 0; i < 2; ++i)
+			dispatch_semaphore_signal(g_presentBudget);
+	}
+	for (int i = 0; i < g_pbWrapCount; ++i) {
+		[g_pbWraps[i].buf release];
+		g_pbWraps[i] = { nullptr, 0, nil };
+	}
+	g_pbWrapCount = 0;
 }

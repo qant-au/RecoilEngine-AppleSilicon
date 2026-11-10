@@ -62,7 +62,7 @@ namespace MacPresent {
 	void RestoreDesktopDisplayMode(SDL_Window* window, int desktopW, int desktopH);
 
 	// read the default framebuffer back and present it onto the CAMetalLayer.
-	// Returns false when the EGL context is not up — the caller falls back to
+	// Returns false when the EGL context is not up - the caller falls back to
 	// SDL_GL_SwapWindow.
 	bool PresentFrame();
 

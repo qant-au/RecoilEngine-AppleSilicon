@@ -49,12 +49,12 @@ CONFIG(float, MacRenderScale).defaultValue(1.0f).minimumValue(0.5f).maximumValue
 CONFIG(int, MacUpscaler).defaultValue(1).minimumValue(0).maximumValue(1).description("macOS: how a frame rendered below window resolution is upscaled. 0 = plain stretch, 1 = MetalFX spatial upscaler (falls back to plain stretch if unavailable). Runtime-changeable.");
 
 // A truly zero-copy present (render the engine FBO directly into the
-// IOSurface that Metal samples — no readback at all) is blocked on Mesa
+// IOSurface that Metal samples - no readback at all) is blocked on Mesa
 // upstream work: KosmicKrisp's VK_EXT_external_memory_metal needs to grow
 // IOSurface/MTLTexture handle support (today it only handles MTLHeap), and
 // Zink needs a new MESA_memory_object_metal GL extension to consume the
-// resulting VkImage as a GL FBO color attachment. Estimated ~1 month of
-// focused upstream work — see IMPROVEMENTS.md for the roadmap.
+// resulting VkImage as a GL FBO color attachment. That is
+// upstream Mesa work; nothing in this file can provide it.
 
 namespace {
 
@@ -69,7 +69,7 @@ std::vector<unsigned char> presentBuf; // reused glReadPixels staging buffer
 
 // BENCHMARK PIN (perf-test only): SPRING_MAC_PERF_RENDER_SIZE=<W>x<H> forces
 // the render target to a fixed pixel count, independent of window size,
-// backing scale, panel geometry and GPU core count. Parsed once — it is read
+// backing scale, panel geometry and GPU core count. Parsed once - it is read
 // from BOTH the initial pbuffer sizing and ResizeIfNeeded, which must agree or
 // a stray resize would silently un-pin the benchmark mid-run. Returns false
 // (leaving w/h untouched) when unset or malformed. See the long comment at the
@@ -87,7 +87,7 @@ bool PerfPinnedRenderSize(int& w, int& h)
 				s_h = rh;
 			} else {
 				LOG_L(L_ERROR, "[EGL] SPRING_MAC_PERF_RENDER_SIZE=\"%s\" is malformed "
-				               "(want <W>x<H>, e.g. 2560x1440) — ignoring", rs);
+				               "(want <W>x<H>, e.g. 2560x1440) - ignoring", rs);
 			}
 		}
 	}
@@ -146,10 +146,10 @@ struct PresentDirectObserver {
 PresentDirectObserver presentDirectObserver;
 
 // Pipelined readback depth: frames of present latency between the GPU pack
-// of a frame and its present. 2 is the certified default (IMPROVEMENTS.md);
+// of a frame and its present. 2 is the default (docs/PERFORMANCE.md);
 // diagnostics builds can override it (SPRING_MAC_PRESENT_LAG=0..3, 0 =
 // synchronous readback of the current frame: zero added latency, stalls
-// until the GPU drains — a latency-debugging tool). Likewise the GPU-pack
+// until the GPU drains - a latency-debugging tool). Likewise the GPU-pack
 // ring can only be disabled (SPRING_MAC_PRESENT_GPUPACK=0, falling back to
 // the staging ring) in diagnostics builds.
 #ifdef SPRING_MAC_DIAGNOSTICS
@@ -170,7 +170,7 @@ constexpr bool useGpuPackRing   = true;
 #endif
 
 // Attach a CAMetalLayer to the SDL window's content view (before EGL sees
-// the window — prevents crashes in wsi_metal_layer_size) and return it for
+// the window - prevents crashes in wsi_metal_layer_size) and return it for
 // the manual present path. Falls back to returning the bare view when the
 // layer cannot be created. MRC rules: +layer is autoreleased; the view
 // retains it via setLayer: and both live for the process lifetime.
@@ -226,7 +226,7 @@ double BackingScaleFactor(SDL_Window* window)
 }
 
 // Physical panel resolution of the given screen's display: the largest mode
-// carrying kDisplayModeNativeFlag. NB "largest mode overall" over-reports —
+// carrying kDisplayModeNativeFlag. NB "largest mode overall" over-reports -
 // macOS synthesizes supersampled scaled modes bigger than the panel (e.g.
 // 7680x3240 on a 5120x2160 panel). Cached per display id; mode enumeration
 // is not free and this runs on every window resize.
@@ -389,7 +389,7 @@ bool CreateContext(SDL_Window* window)
 	// dominant per-frame cost (measured 40-55ms at 2944x1908). The Metal
 	// present pass linear-samples the IOSurface into the drawable, so we can
 	// render at logical (1x) resolution and let CoreAnimation upscale to
-	// Retina with negligible cost — at ~4x less readback data. Opt in with
+	// Retina with negligible cost - at ~4x less readback data. Opt in with
 	// SPRING_MAC_NO_RETINA=1.
 	int winW = 0, winH = 0;
 	SDL_GetWindowSize(window, &winW, &winH);
@@ -406,7 +406,7 @@ bool CreateContext(SDL_Window* window)
 	// Perf-test only. Everything above derives the render resolution from the
 	// hardware, through FOUR separate couplings, so the "same" benchmark is a
 	// different workload on every setup (all measured 2026-08-07):
-	//   1. the window itself is clamped to fit the screen — a 1920x1080 pin
+	//   1. the window itself is clamped to fit the screen - a 1920x1080 pin
 	//      actually got 1873x1018 on a 1920x1080 panel (menu bar + title bar);
 	//   2. bsf is the monitor's backing scale (1x here, 2x on the Dell = 4x
 	//      the pixels for an identical command line);
@@ -415,7 +415,7 @@ bool CreateContext(SDL_Window* window)
 	//   4. its GPU pixel budget keys off GPU CORE COUNT (60 cores -> 36 MP and
 	//      never caps; a 10-core Air -> 6 MP and does).
 	// Overriding pbuf directly bypasses all four at once. This is the same
-	// mechanism SPRING_MAC_NO_RETINA already relies on — the Metal present pass
+	// mechanism SPRING_MAC_NO_RETINA already relies on - the Metal present pass
 	// linear-samples the source into the drawable, so a render target that does
 	// not match the window is scaled at present time (up or down) for free.
 	// GetDrawableSize() returns pbufW/pbufH, so the engine's viewport and FBO
@@ -427,7 +427,7 @@ bool CreateContext(SDL_Window* window)
 	LOG("[EGL] window %dx%d pts * %.2f scale -> pbuffer %dx%d px%s%s",
 			winW, winH, bsf, pxW, pxH,
 			noRetina ? " (SPRING_MAC_NO_RETINA=1)" : "",
-			perfSize ? " (SPRING_MAC_PERF_RENDER_SIZE — hardware-independent)" : "");
+			perfSize ? " (SPRING_MAC_PERF_RENDER_SIZE - hardware-independent)" : "");
 	if (noRetina)
 		LOG("[EGL] true backing scale=%.2f; CoreAnimation will upscale", bsfTrue);
 	if (perfSize)
@@ -566,7 +566,7 @@ void DestroyContext()
 		// submits a signal event to a Metal command buffer that may already
 		// be tearing down, Metal raises an NSException, and the process dies
 		// with SIGABRT (reproduced after long GUI sessions). We are exiting
-		// anyway — the OS reclaims the GPU objects — so skip the destruction
+		// anyway - the OS reclaims the GPU objects - so skip the destruction
 		// ("fast exit"). Set SPRING_EGL_FULL_TEARDOWN=1 to restore it when
 		// debugging the driver race itself.
 		if (getenv("SPRING_EGL_FULL_TEARDOWN") != nullptr) {
@@ -612,18 +612,18 @@ void GetDrawableSize(int& w, int& h)
 // Effective render scale = NSWindow.backingScaleFactor with two
 // hardware-aware caps, so the DEFAULT render resolution is sensible on any
 // machine without touching (or ever overriding) the user's configured
-// window size/resolution — those are in points and stay fully honored;
+// window size/resolution - those are in points and stay fully honored;
 // only the default-framebuffer pixel density changes.
 //
-// Cap 1 — never render more pixels than the physical panel can display.
+// Cap 1 - never render more pixels than the physical panel can display.
 // macOS "scaled" desktop modes back the desktop with MORE pixels than the
 // panel has (M2 Air 13.6" default "looks like 1470x956" = 2940x1912 backing
 // on a 2560x1664 panel = +31% pixels) and the window server downsamples.
 // Rendering at that oversized backing burns GPU fragment/bandwidth time on
-// pixels that never reach the screen — capping to the panel ratio is
+// pixels that never reach the screen - capping to the panel ratio is
 // fidelity-neutral by construction.
 //
-// Cap 2 — pixel budget for small GPUs driving large displays (e.g. an Air
+// Cap 2 - pixel budget for small GPUs driving large displays (e.g. an Air
 // on a 5K monitor): the default framebuffer is kept within ~0.6 MPixels per
 // Apple-GPU core (M2 Air, 10 cores -> 6.0 MP: its own 4.3 MP panel is
 // unaffected, a 14.7 MP 5K desktop is capped; M2 Ultra, 60 cores -> 36 MP:
@@ -638,7 +638,7 @@ static double HardwareBackingScale(SDL_Window* window);
 // MacRenderScale: user-chosen fraction of the hardware-derived resolution.
 // The Metal present pass upscales the smaller frame to the drawable (MetalFX
 // spatial when MacUpscaler=1), and every pixel not rendered is also a pixel
-// not read back — the readback is the dominant per-frame cost on this port.
+// not read back - the readback is the dominant per-frame cost on this port.
 double EffectiveBackingScale(SDL_Window* window)
 {
 	const double hw = HardwareBackingScale(window);
@@ -684,7 +684,7 @@ static double HardwareBackingScale(SDL_Window* window)
 		const double panelScale = std::min(panelW / desktopPts.width, panelH / desktopPts.height);
 		if (panelScale < scale) {
 			scale = panelScale;
-			capReason = " — capped to panel-native (scaled desktop backing > panel)";
+			capReason = " - capped to panel-native (scaled desktop backing > panel)";
 		}
 	}
 
@@ -697,7 +697,7 @@ static double HardwareBackingScale(SDL_Window* window)
 		const double budgetPx = double(gpuCores) * 600.0e3;
 		if (double(winW) * double(winH) * scale * scale > budgetPx) {
 			scale = std::sqrt(budgetPx / (double(winW) * double(winH)));
-			capReason = " — capped by GPU pixel budget (small GPU, large display)";
+			capReason = " - capped by GPU pixel budget (small GPU, large display)";
 		}
 	}
 
@@ -715,11 +715,11 @@ static double HardwareBackingScale(SDL_Window* window)
 	return scale;
 }
 
-// Boot ("desktop") display modes, captured once at CreateContext — the game
+// Boot ("desktop") display modes, captured once at CreateContext - the game
 // always boots with every display at the user's configured mode. Used to put
 // a single display back after exclusive fullscreen strands it in a lowered
 // mode. NB: CGRestorePermanentDisplayConfiguration was tried first and is the
-// WRONG hammer — it reconfigures every display and relocated the game window
+// WRONG hammer - it reconfigures every display and relocated the game window
 // onto the secondary (virtual) display, violating display preservation.
 static std::vector<std::pair<CGDirectDisplayID, CGDisplayModeRef>> s_bootDisplayModes;
 
@@ -743,7 +743,7 @@ void CaptureBootDisplayModes()
 // 1920x1080 for 12+ s after SDL_SetWindowFullscreen(window, 0); no window
 // event fires, so nothing downstream corrects it either). When the engine
 // switches to any NON-exclusive mode, compare the window's display point
-// size against the expected desktop size and — on mismatch — set THAT
+// size against the expected desktop size and - on mismatch - set THAT
 // display back to its boot mode (per-display, no global reconfiguration).
 void RestoreDesktopDisplayMode(SDL_Window* window, int desktopW, int desktopH)
 {
@@ -769,7 +769,7 @@ void RestoreDesktopDisplayMode(SDL_Window* window, int desktopW, int desktopH)
 	for (const auto& [bootDid, bootMode] : s_bootDisplayModes) {
 		if (bootDid != did)
 			continue;
-		LOG("[EGL] display %u at %.0fx%.0f pt != desktop %dx%d pt after leaving exclusive fullscreen — restoring its boot mode",
+		LOG("[EGL] display %u at %.0fx%.0f pt != desktop %dx%d pt after leaving exclusive fullscreen - restoring its boot mode",
 				did, cur.width, cur.height, desktopW, desktopH);
 		CGDisplaySetDisplayMode(did, bootMode, nullptr);
 		return;
@@ -781,13 +781,13 @@ void RestoreDesktopDisplayMode(SDL_Window* window, int desktopW, int desktopH)
 // normal-level windows within the visibleFrame (menu bar + Dock excluded;
 // SDL_MaximizeWindow = [NSWindow zoom:] does the same), which exposed dead
 // screen bands where the cursor left the window (SDL LEAVE -> pointer
-// recentre -> edge scroll broken at those edges; v0.12-RC bug 1).
+// recentre -> edge scroll broken at those edges).
 // borderless-fullscreen enforcement state: remembered so PresentFrame can
 // re-assert AFTER async display reconfiguration. Leaving exclusive fullscreen
 // restores the desktop display mode asynchronously; if the borderless frame
 // was enforced against the still-lowered mode (e.g. 1920x1080 while the 1080p
 // exclusive mode is being torn down), the window would keep that stale frame
-// forever — the mode restore emits NO window resize event. The periodic
+// forever - the mode restore emits NO window resize event. The periodic
 // re-check (every ~60 presents; a frame fetch + compare, setFrame only when
 // different) converges to a no-op once the frame matches the screen.
 static bool        s_blFullscreenActive = false;
@@ -920,7 +920,7 @@ namespace {
 //
 // How: frame N blits the default framebuffer into ring[N % RB_RING]
 // (GPU-queued, returns immediately) and reads back ring[(N - lag) % RB_RING],
-// whose GPU work completed `lag` frames ago — the fallback map then has
+// whose GPU work completed `lag` frames ago - the fallback map then has
 // nothing to wait for. Costs `lag` frames of present latency.
 constexpr int RB_RING = 3;
 unsigned int rbFBO[RB_RING] = { 0, 0, 0 };
@@ -932,7 +932,7 @@ long rbFrame = 0;
 // into a pixel-pack BUFFER via Mesa's compute-pack path (st_pbo download):
 // non-blocking on the CPU AND queue-depth-independent, unlike any texture
 // readback, because mapping an idle linear buffer needs no new GPU work.
-// Requirements discovered with testkit/readback-bench.c:
+// Requirements, found by measurement:
 //  - a PIXEL_PACK buffer must be bound (raw-pointer reads never GPU-pack) and
 //  - the read format must match the framebuffer's component order exactly
 //    (a swizzling read falls off the fast path -> sync texture map, ~30ms in
@@ -1017,7 +1017,7 @@ bool EnsureStagingRing(int w, int h)
 // semaphore in MetalPresent.mm); at lag L a slot is re-packed DP_RING - L
 // frames after its present was queued, so DP_RING = 6 leaves >= 1 frame of
 // margin at the maximum lag of 3. Packing into a persistently-mapped buffer
-// is legal GL (unlike a plain mapped one — the bug class behind the reverted
+// is legal GL (unlike a plain mapped one - the bug class behind the reverted
 // async-copy experiment).
 constexpr int DP_RING = 6;
 unsigned int dpPBO[DP_RING]   = { 0 };
@@ -1070,7 +1070,7 @@ bool EnsureDirectRing(int w, int h)
 	ReleaseDirectRing();
 
 	if (GLAD_GL_ARB_buffer_storage == 0 && !GLAD_GL_VERSION_4_4) {
-		LOG_L(L_WARNING, "[MacPresent] no ARB_buffer_storage — direct present unavailable");
+		LOG_L(L_WARNING, "[MacPresent] no ARB_buffer_storage - direct present unavailable");
 		return false;
 	}
 
@@ -1094,7 +1094,7 @@ bool EnsureDirectRing(int w, int h)
 		dpMap[i] = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr)allocBytes,
 		                            GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
 		if (dpMap[i] == nullptr || ((uintptr_t)dpMap[i] & (pageSz - 1)) != 0) {
-			// unaligned pointers cannot be wrapped by Metal — bail to fallback
+			// unaligned pointers cannot be wrapped by Metal - bail to fallback
 			LOG_L(L_WARNING, "[MacPresent] persistent map %s (slot %d, ptr %p)",
 			        dpMap[i] == nullptr ? "failed" : "not page-aligned", i, dpMap[i]);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
@@ -1118,7 +1118,7 @@ bool EnsureDirectRing(int w, int h)
 }
 
 // Pack this frame into the ring and hand the lag-frames-old slot to the Metal
-// present. Returns false (and latches dpFailed) if the path is unavailable —
+// present. Returns false (and latches dpFailed) if the path is unavailable -
 // the caller then runs the IOSurface fallback from this frame on, until the
 // render size changes.
 bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
@@ -1154,7 +1154,7 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 	if (dpFrame < 100) {
 		const GLenum pe = glGetError();
 		if (pe != GL_NO_ERROR) {
-			LOG_L(L_WARNING, "[MacPresent] pack into persistent PBO failed (err 0x%04x) — disabling direct present", pe);
+			LOG_L(L_WARNING, "[MacPresent] pack into persistent PBO failed (err 0x%04x) - disabling direct present", pe);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 			FailDirectPresent(rdW, rdH);
 			return false;
@@ -1170,10 +1170,10 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 	if (dpFrame >= lagFrames) {
 		// Metal must not read pages the pack compute is still writing. The
 		// CPU map used to guarantee this implicitly by blocking until the
-		// pack completed — and that block doubled as PIPELINE BACKPRESSURE:
+		// pack completed - and that block doubled as PIPELINE BACKPRESSURE:
 		// removing it entirely (tried: present newest-completed slot, skip
 		// when none) let the main thread run ahead until the GPU sat 5+
-		// frames deep and most presents were SKIPPED — high "rendered" fps,
+		// frames deep and most presents were SKIPPED - high "rendered" fps,
 		// stale glass. Smoothness is the product, so the wait stays; the
 		// copy removal is still a win everywhere the GPU keeps up.
 		int old = (int)((dpFrame - lagFrames) % DP_RING);
@@ -1188,7 +1188,7 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 				// error). At L_WARNING it spammed the on-screen console; keep it in the
 				// log (rate-limited to powers of two) for perf diagnosis only.
 				if ((fenceWaits & (fenceWaits - 1)) == 0) // log 1,2,4,8,...
-					LOG_L(L_INFO, "[MacPresent] lag-%d pack fence not signaled — waiting (GPU behind, x%llu)",
+					LOG_L(L_INFO, "[MacPresent] lag-%d pack fence not signaled - waiting (GPU behind, x%llu)",
 					        lagFrames, (unsigned long long)fenceWaits);
 				if (glClientWaitSync(dpFence[old], GL_SYNC_FLUSH_COMMANDS_BIT, 100000000ull) == GL_TIMEOUT_EXPIRED) {
 					// pathological (>100ms): use the newest COMPLETED older slot
@@ -1248,7 +1248,7 @@ bool PresentFrame()
 	//
 	// Fast path: glReadPixels writes directly into an IOSurface-backed
 	// MTLTexture (no CPU intermediate buffer, no CPU Y-flip, no
-	// replaceRegion upload — Metal samples the same backing store and
+	// replaceRegion upload - Metal samples the same backing store and
 	// flips during a one-triangle render pass to the drawable).
 	//
 	// Fallback path: SPRING_MAC_LEGACY_PRESENT=1 or AcquireIOSurfaceBuffer
@@ -1284,7 +1284,7 @@ bool PresentFrame()
 #endif
 
 	// Direct pixel-buffer present: the Metal present shader reads the
-	// persistently-mapped pack ring straight from unified memory — no
+	// persistently-mapped pack ring straight from unified memory - no
 	// IOSurface staging, no per-frame CPU map + 44MB memcpy. Governed by
 	// the MacPresentDirect config (mirrored by the observer registered in
 	// CreateContext, so a probe widget can flip it mid-run and A/B legs
@@ -1297,7 +1297,7 @@ bool PresentFrame()
 		directDone = DirectPresentFrame(rdW, rdH, readFormat, presentLagFrames);
 		static bool loggedFallback = false;
 		if (!directDone && !loggedFallback) {
-			LOG_L(L_WARNING, "[MacPresent] direct pixel-buffer path unavailable — using IOSurface fallback");
+			LOG_L(L_WARNING, "[MacPresent] direct pixel-buffer path unavailable - using IOSurface fallback");
 			loggedFallback = true;
 		}
 	}
@@ -1393,7 +1393,7 @@ bool PresentFrame()
 		glFlush(); // submit the batch so the blit executes during this frame
 
 		if (rbFrame >= presentLagFrames) {
-			// read back the `lag`-frames-old slot — its GPU work is done,
+			// read back the `lag`-frames-old slot - its GPU work is done,
 			// so the driver's synchronous-map fallback returns immediately
 			const int old = (int)((rbFrame - presentLagFrames) % RB_RING);
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, rbFBO[old]);
@@ -1431,7 +1431,7 @@ bool PresentFrame()
 	} else if (ioBase != nullptr) {
 		// lag 0: synchronous readback of the current frame straight into the
 		// IOSurface. Zero added present latency, but glReadPixels stalls
-		// until the GPU pipeline drains — kept as the minimal-latency/
+		// until the GPU pipeline drains - kept as the minimal-latency/
 		// debugging path.
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 		const int rowPixels = static_cast<int>(ioRowBytes / 4);
@@ -1497,7 +1497,7 @@ bool PresentFrame()
 	}
 	// We replaced SDL_GL_SwapWindow (which serviced the Cocoa run loop),
 	// so pump events here to let CoreAnimation actually composite the
-	// presented drawable — including during the single-threaded load.
+	// presented drawable - including during the single-threaded load.
 	SDL_PumpEvents();
 	return true;
 }
