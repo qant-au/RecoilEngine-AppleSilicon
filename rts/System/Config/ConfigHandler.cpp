@@ -42,11 +42,15 @@ LOG_REGISTER_SECTION_GLOBAL(LOG_SECTION_CONFIG)
 namespace {
 	static bool ConfigDbgEnabled()
 	{
+#ifdef __APPLE__
 		static const bool enabled = []() {
 			const char* e = getenv("SPRING_DBG_CONFIG");
 			return (e != nullptr && e[0] != '\0' && e[0] != '0');
 		}();
 		return enabled;
+#else
+		return false; // macOS support trace only
+#endif
 	}
 
 	// Dedup identical consecutive (key -> value) transitions within this window;

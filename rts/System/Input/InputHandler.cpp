@@ -19,9 +19,11 @@
 
 InputHandler input;
 
+#ifdef SPRING_MAC_DIAGNOSTICS
 // ---------------------------------------------------------------------------
-// SPRING_DBG_INJECT (KEEP; off by default; zero cost when the env var is
-// unset): scripted synthetic-input injection at the SDL event queue.
+// SPRING_DBG_INJECT (diagnostics builds only, -DSPRING_MAC_DIAGNOSTICS=ON; not
+// compiled into releases or into any non-macOS build; off unless the env var
+// is set): scripted synthetic-input injection at the SDL event queue.
 //
 // Rationale: OS-level input synthesis (CGEvent on macOS) cannot reach the
 // game when the console session is locked/headless, which blocks unattended
@@ -162,6 +164,7 @@ private:
 
 } // namespace
 // ---------------------------------------------------------------------------
+#endif // SPRING_MAC_DIAGNOSTICS
 
 InputHandler::InputHandler() = default;
 
@@ -179,6 +182,7 @@ void InputHandler::PushEvents()
 {
 	SCOPED_TIMER("Misc::InputHandler::PushEvents");
 
+#ifdef SPRING_MAC_DIAGNOSTICS
 	// scripted gesture injection (no-op unless SPRING_DBG_INJECT is set);
 	// pushed into SDL's queue HERE so the poll loop below drains the events
 	// through the exact per-frame path real input takes
@@ -186,6 +190,7 @@ void InputHandler::PushEvents()
 		static GestureInjector injector;
 		injector.Pump();
 	}
+#endif
 
 	SDL_Event event;
 

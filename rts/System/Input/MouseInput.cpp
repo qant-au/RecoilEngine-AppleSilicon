@@ -65,11 +65,15 @@ namespace {
 	// Checked once and cached; zero runtime cost when disabled.
 	static bool InputDbgEnabled()
 	{
+#ifdef __APPLE__
 		static const bool enabled = []() {
 			const char* e = getenv("SPRING_DBG_INPUT");
 			return (e != nullptr && e[0] != '\0' && e[0] != '0');
 		}();
 		return enabled;
+#else
+		return false; // macOS support trace only
+#endif
 	}
 
 	// SDL sets `which` to SDL_TOUCH_MOUSEID for events synthesized from touch

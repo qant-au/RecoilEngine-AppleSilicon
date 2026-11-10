@@ -273,11 +273,25 @@ Environment (support escape hatches; all default off/unset):
 | `SPRING_MAC_STREAM_BUFFERING=n` | Stream-buffer ring depth 2..8 (default 3). |
 | `SPRING_LUAVAO_FORCE_RESTART=1` | Restore upstream primitive-restart behavior on list topologies. |
 | `SPRING_DUMP_STATE_RANGE=min:max` | Dump full synced state per frame in the range (desync triage; local analysis only). |
+| `SPRING_DBG_INPUT=1` | Log every mouse, wheel and motion event with its source, for input reports (macOS builds only). |
+| `SPRING_DBG_CONFIG=1` | Log every settings change made during play, for settings reports (macOS builds only). |
+| `SPRING_HITCH_LOG=ms` | Log each frame slower than this many milliseconds (50 if the value is 1 or less) with a per-timer breakdown. |
+
+Environment used by the test scripts (they run against the release build, so
+these stay compiled in; all default unset):
+
+| Var | Effect |
+|---|---|
+| `SPRING_DEMO_SPEED=n` | Play a demo back n times faster than real time; demos only (`scripts/replay-check.sh`, `scripts/visreg.sh`). |
+| `SPRING_MAC_FIXED_WINDOW=1` | Keep the window at the configured size and position (`scripts/visreg.sh`). |
+| `SPRING_MAC_PERF_PIN=1` | Fixed presentation conditions for benchmarks and picture comparison; turns display pacing off (`scripts/visreg.sh`). |
+| `SPRING_MAC_PERF_RENDER_SIZE=WxH` | Fixed render size, independent of the window size (benchmarks). |
 
 Diagnostics builds only (`cmake -DSPRING_MAC_DIAGNOSTICS=ON`; not compiled
 into releases): `SPRING_MAC_PRESENT_TEST`, `SPRING_FRAME_CAPTURE[_EVERY/_LIMIT]`,
 `SPRING_MAC_DUMP_FRAME`, `SPRING_TIME_PRESENT`, `SPRING_MAC_PRESENT_LAG`,
-`SPRING_MAC_PRESENT_GPUPACK`.
+`SPRING_MAC_PRESENT_GPUPACK`, `SPRING_DBG_INJECT` (scripted mouse input from a
+file).
 
 ## Documentation
 

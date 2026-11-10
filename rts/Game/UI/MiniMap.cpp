@@ -64,11 +64,15 @@ using namespace GL::State;
 // pairs with the MouseInput.cpp event logging under the same env var.
 static bool MiniMapInputDbg()
 {
+#ifdef __APPLE__
 	static const bool enabled = []() {
 		const char* e = getenv("SPRING_DBG_INPUT");
 		return (e != nullptr && e[0] != '\0' && e[0] != '0');
 	}();
 	return enabled;
+#else
+	return false; // macOS support trace only
+#endif
 }
 
 
