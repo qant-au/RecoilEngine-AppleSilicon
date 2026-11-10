@@ -213,8 +213,12 @@ make engine      # just the engine binary, with the libm parity gate
 **Online play is disabled by default** in every build, source builds included
 (`packaging/release-build.sh` defaults to `BAR_ONLINE=0`: the online lobby
 resolves to an unreachable loopback endpoint; LAN and local play are
-unaffected). `ONLINE=0 make app` and `--disable-online` remain as explicit
-spellings of the default; `--enable-online` is a deliberate local opt-in.
+unaffected). The `make` targets always pass the choice explicitly, so an
+exported `BAR_ONLINE` cannot decide it: `ONLINE=1 make app` (or
+`--enable-online`) is a deliberate local opt-in. A Developer ID build refuses
+online play, pinned content tags and a non-default message or update address
+unless `--allow-release-overrides` is given, and the build summary prints the
+values in effect.
 Approval to connect to BAR's community servers has not been sought for this
 repository yet: do not distribute an online-enabled build until it is.
 

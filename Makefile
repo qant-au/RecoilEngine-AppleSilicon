@@ -31,7 +31,9 @@ VERSION  ?=
 ONLINE   ?=
 
 VERSION_ARG := $(if $(VERSION),--version "$(VERSION)",)
-ONLINE_ARG  := $(if $(filter 0,$(ONLINE)),--disable-online,)
+# Always explicit, so an exported BAR_ONLINE cannot decide it: online play is
+# off unless ONLINE=1 is given on this command line.
+ONLINE_ARG  := $(if $(filter 1,$(ONLINE)),--enable-online,--disable-online)
 
 .DEFAULT_GOAL := help
 .PHONY: help app engine-dist certify release engine test clean-artifacts
@@ -46,7 +48,7 @@ help:
 	@echo "                 IDENTITY=\"Developer ID Application: NAME (TEAMID)\" NOTARY_PROFILE=<profile> make release"
 	@echo "  make engine    just the engine binary (no bundle)"
 	@echo "  make clean-artifacts   remove staged bundles/zips/dmgs"
-	@echo "  ONLINE=0 make ...      disable online play (enabled by default)"
+	@echo "  ONLINE=1 make ...      enable online play (off by default; a Developer ID build refuses it)"
 
 app:
 	packaging/release-build.sh $(VERSION_ARG) $(ONLINE_ARG)

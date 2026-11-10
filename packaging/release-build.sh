@@ -102,14 +102,16 @@ ENABLE_ONLINE="${BAR_ONLINE:-0}"
 # messages.json each launch. Default = the port's GitHub repo. Override with
 # --messages-config <https-url> or --messages-local <path> (a local file,
 # baked as a file:// URL — for testing builds against an unpublished config).
-MESSAGES_CONFIG="${BAR_MESSAGES_CONFIG:-https://raw.githubusercontent.com/qant-au/RecoilEngine-AppleSilicon/main/message-config/messages.json}"
+DEFAULT_MESSAGES_CONFIG="https://raw.githubusercontent.com/qant-au/RecoilEngine-AppleSilicon/main/message-config/messages.json"
+MESSAGES_CONFIG="${BAR_MESSAGES_CONFIG:-$DEFAULT_MESSAGES_CONFIG}"
 # In-app updater (acu-030, packaging/updater.swift). The app checks UPDATE_FEED
 # each launch; the release key's PUBLIC half (packaging/update-public-key) is
 # baked in, and when the PRIVATE half is on this machine the build also writes
 # a signed appcast.json beside the zip. Publish both with the release: the
 # zip at UPDATE_DOWNLOAD_BASE/v<port>/, appcast.json as a release asset so
 # releases/latest/download/appcast.json always names the newest one.
-UPDATE_FEED="${ACCURONA_UPDATE_FEED:-https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json}"
+DEFAULT_UPDATE_FEED="https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json"
+UPDATE_FEED="${ACCURONA_UPDATE_FEED:-$DEFAULT_UPDATE_FEED}"
 UPDATE_DOWNLOAD_BASE="${ACCURONA_UPDATE_DOWNLOAD_BASE:-https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/download}"
 UPDATE_SIGNING_KEY="${ACCURONA_UPDATE_SIGNING_KEY:-$HOME/.accurona/update-signing.key}"
 
@@ -128,6 +130,7 @@ UPDATE_SIGNING_KEY="${ACCURONA_UPDATE_SIGNING_KEY:-$HOME/.accurona/update-signin
 # A SHIPPING artifact must have passed sync-test + visreg + certify. An ad-hoc
 # build only warns about a skipped stage, so build boxes can package; a
 # Developer ID build (--identity) always runs all three.
+ALLOW_RELEASE_OVERRIDES=0
 RUN_SYNC_TEST=${RELEASE_SYNC_TEST:-0}
 RUN_VISREG=${RELEASE_VISREG:-0}
 REPLAY_SMOKE=${RELEASE_CERTIFY:-0}
@@ -154,6 +157,7 @@ while [ $# -gt 0 ]; do
     --with-synctest) RUN_SYNC_TEST=1; shift;;
     --skip-sync-test) RUN_SYNC_TEST=0; shift;;     # now the default; kept for compat
     --with-visreg) RUN_VISREG=1; shift;;
+    --allow-release-overrides) ALLOW_RELEASE_OVERRIDES=1; shift;;
     --with-perf) echo "--with-perf: there is no perf gate yet (scripts/visreg.sh has none)"; exit 2;;
     *) echo "unknown arg: $1"; exit 2;;
   esac
@@ -164,6 +168,24 @@ done
 if [ "$IDENTITY" != "-" ]; then
   RUN_SYNC_TEST=1; REPLAY_SMOKE=1
   [ "$PROFILE" = "bar" ] && RUN_VISREG=1
+fi
+
+# A Developer ID build must also be the standard build. Anything that makes it
+# reach other servers or install other content is a test setting, and an
+# exported variable left over from testing must not end up in a signed app.
+# --allow-release-overrides is the deliberate way through.
+if [ "$IDENTITY" != "-" ] && [ "$PROFILE" = "bar" ] && [ "$ALLOW_RELEASE_OVERRIDES" != "1" ]; then
+  OVERRIDES=()
+  [ "$ENABLE_ONLINE" = "1" ] && OVERRIDES+=("online play is enabled (--enable-online or BAR_ONLINE=1)")
+  [ -n "${BAR_CONTENT_TAGS:-}" ] && OVERRIDES+=("BAR_CONTENT_TAGS pins non-standard content: $BAR_CONTENT_TAGS")
+  [ "$MESSAGES_CONFIG" != "$DEFAULT_MESSAGES_CONFIG" ] && OVERRIDES+=("message config is not the default: $MESSAGES_CONFIG")
+  [ "$UPDATE_FEED" != "$DEFAULT_UPDATE_FEED" ] && OVERRIDES+=("update feed is not the default: $UPDATE_FEED")
+  if [ "${#OVERRIDES[@]}" -gt 0 ]; then
+    echo "FATAL: a Developer ID build with test settings:"
+    printf '  - %s\n' "${OVERRIDES[@]}"
+    echo "  Unset them, or pass --allow-release-overrides if this is deliberate."
+    exit 2
+  fi
 fi
 
 case "$PROFILE" in
@@ -427,9 +449,9 @@ cfg["server"]["port"] = 1
 json.dump(cfg, open(p, "w"), indent=2)
 NEUTER
     touch "$RESOURCES/.online-play-disabled"
-    echo "online play: DISABLED (--disable-online / BAR_ONLINE=0)"
+    echo "online play: DISABLED (the default)"
   else
-    echo "online play: ENABLED (default)"
+    echo "online play: ENABLED (--enable-online / BAR_ONLINE=1)"
   fi
   # Bake the message-config source for the shipped launcher (launcher.sh reads
   # this staged file; BAR_MESSAGE_CONFIG_URL still overrides at runtime).
@@ -539,12 +561,6 @@ if [ -f "$MACOS/libunitsync.dylib" ]; then
 fi
 for d in "$FRAMEWORKS"/*.dylib; do bundle_deps "$d"; done
 
-# engine-profile extras, when staged (an array: the bundle path has a space)
-EXTRA_MACHO=()
-for x in spring-headless spring-dedicated libunitsync.dylib; do
-  if [ -f "$MACOS/$x" ]; then EXTRA_MACHO+=("$MACOS/$x"); fi
-done
-
 # Build machines leak LC_RPATHs into binaries (brew lib dirs, build trees).
 # Inside the bundle those must not exist: a foreign rpath makes dyld resolve
 # @rpath deps OUTSIDE the bundle (works on the build box, breaks or loads the
@@ -560,17 +576,27 @@ strip_foreign_rpaths() { # strip_foreign_rpaths <macho>
     esac
   done
 }
-for m in "$MACOS/spring" "$MACOS/pr-downloader" ${EXTRA_MACHO[@]+"${EXTRA_MACHO[@]}"} "$FRAMEWORKS"/*.dylib; do
+# Every Mach-O in the app, wherever it sits (the AI libraries live under
+# Resources/AI): the audits below walk this list, not a list of known folders.
+ALL_MACHO=()
+while IFS= read -r m; do
+  [ -n "$m" ] || continue
+  case "$(file -b "$m" 2>/dev/null)" in *Mach-O*) ALL_MACHO+=("$m");; esac
+done <<EOF
+$(find "$APP" -type f 2>/dev/null)
+EOF
+[ "${#ALL_MACHO[@]}" -gt 0 ] || { echo "FATAL: found no Mach-O file in $APP"; exit 1; }
+for m in "${ALL_MACHO[@]}"; do
   strip_foreign_rpaths "$m"
 done
 for d in "$FRAMEWORKS"/*.dylib; do
   install_name_tool -add_rpath "@loader_path" "$d" 2>/dev/null || true
 done
 AUDIT_FAIL=0
-for m in "$MACOS/spring" "$MACOS/pr-downloader" ${EXTRA_MACHO[@]+"${EXTRA_MACHO[@]}"} "$FRAMEWORKS"/*.dylib; do
-  # dylibs print their own LC_ID_DYLIB as line 2 — skip it (IDs are
+for m in "${ALL_MACHO[@]}"; do
+  # a library prints its own LC_ID_DYLIB as line 2 — skip it (IDs are
   # normalized to @rpath above; only real DEPENDENCIES matter here)
-  skip=2; case "$m" in *.dylib) skip=3;; esac
+  skip=2; [ -n "$(otool -D "$m" 2>/dev/null | tail -n +2)" ] && skip=3
   bad=$(otool -L "$m" | tail -n +$skip | awk '{print $1}' | \
         grep -Ev '^(/System|/usr/lib|@rpath|@loader_path|@executable_path)' || true)
   if [ -n "$bad" ]; then
@@ -588,17 +614,25 @@ for m in "$MACOS/spring" "$MACOS/pr-downloader" ${EXTRA_MACHO[@]+"${EXTRA_MACHO[
     fi
   done
 done
+# No search path may point outside the bundle after the strip above: a foreign
+# one makes dyld look on the user's disk for what the build machine had.
+for m in "${ALL_MACHO[@]}"; do
+  for rp in $(otool -l "$m" | awk '/LC_RPATH/{getline;getline; print $2}'); do
+    case "$rp" in
+      @executable_path|@executable_path/*|@loader_path|@loader_path/*) ;;
+      *) echo "FATAL: ${m#"$APP"/} keeps a search path outside the bundle: $rp"; AUDIT_FAIL=1;;
+    esac
+  done
+done
 [ "$AUDIT_FAIL" = "0" ] || exit 1
-echo "bundle closure audit: all references bundle-relative, resolvable, or system"
+echo "bundle closure audit: ${#ALL_MACHO[@]} Mach-O files, all references and search paths bundle-relative, resolvable, or system"
 
 # Deployment-target audit: no bundled Mach-O may require a newer macOS than the
 # bundle declares (LSMinimumSystemVersion = $MACOSX_DEPLOYMENT_TARGET). Homebrew
 # bottles carry the minos of the macOS they were bottled on (minizip came out
 # 27.2 against a 27.0 floor), and dyld on the build machine tolerates it, so
 # only a check on the artifact itself catches this before a user does.
-for m in "$MACOS"/* "$FRAMEWORKS"/*.dylib; do
-  [ -L "$m" ] && continue
-  file "$m" | grep -q 'Mach-O' || continue
+for m in "${ALL_MACHO[@]}"; do
   mo=$(vtool -show-build "$m" 2>/dev/null | awk '/minos/{print $2; exit}')
   [ -n "$mo" ] || continue
   if [ "$(printf '%s\n%s\n' "$mo" "$MACOSX_DEPLOYMENT_TARGET" | sort -V | tail -1)" != "$MACOSX_DEPLOYMENT_TARGET" ]; then
@@ -618,24 +652,31 @@ echo "deployment-target audit: every bundled Mach-O loads on macOS $MACOSX_DEPLO
 # -S drops the debug (STABS) entries only and keeps the regular symbol table,
 # so crash backtraces still resolve function names. Must run before codesign:
 # stripping a signed Mach-O invalidates its signature.
-while IFS= read -r m; do
-  case "$(file -b "$m" 2>/dev/null)" in *Mach-O*) ;; *) continue;; esac
+STRIP_FAIL=0
+for m in "${ALL_MACHO[@]}"; do
   chmod u+w "$m" 2>/dev/null || true
-  strip -S "$m" 2>/dev/null || true
-done <<EOF
-$(find "$APP" -type f \( -perm -u+x -o -name '*.dylib' \) 2>/dev/null)
-EOF
-echo "debug symbol tables stripped from bundled Mach-Os"
+  # a file that cannot be stripped keeps its debug map, builder paths included
+  strip -S "$m" 2>/dev/null || { echo "FATAL: could not strip ${m#"$APP"/}"; STRIP_FAIL=1; }
+done
+[ "$STRIP_FAIL" = "0" ] || exit 1
+echo "debug symbol tables stripped from ${#ALL_MACHO[@]} bundled Mach-O files"
 
 # Builder-path audit. Scan the ARTIFACT and hard-fail: whatever reaches
 # this point is about to be signed, notarized and published, and publishing
 # cannot be undone. Uses a raw byte grep, NOT `strings` — `strings` reads only
 # the text section by default and silently misses debug-map paths (LESSON-41).
+# /Users/ alone misses a checkout anywhere else (/Volumes, /private/tmp, a CI
+# runner), so the roots this build actually used are searched for as well.
+LEAK_RE='/Users/'
+for root in "$BAR" "$(cd "$BAR" && pwd -P)" "$HOME" "$SRC" "$BUILD" "$MESA_PREFIX"; do
+  [ "${#root}" -ge 4 ] || continue
+  LEAK_RE="$LEAK_RE|$(printf '%s' "$root" | sed 's/[][\.^$*+?(){}|]/\\&/g')"
+done
 PATHLEAK_FAIL=0
 while IFS= read -r m; do
   # LC_ALL=C on sort too, or a UTF-8 locale makes it abort on raw bytes
   # ("Illegal byte sequence") and the audit silently passes
-  hits="$(LC_ALL=C grep -a -o '/Users/[^ "]\{0,120\}' "$m" 2>/dev/null | LC_ALL=C sort -u || true)"
+  hits="$(LC_ALL=C grep -a -o -E "($LEAK_RE)[^ \"]{0,120}" "$m" 2>/dev/null | LC_ALL=C sort -u || true)"
   if [ -n "$hits" ]; then
     echo "FATAL: ${m#"$APP"/} embeds $(echo "$hits" | wc -l | tr -d ' ') builder path(s):"
     echo "$hits" | head -5 | sed 's/^/    /'
@@ -645,7 +686,7 @@ done <<EOF
 $(find "$APP" -type f 2>/dev/null)
 EOF
 [ "$PATHLEAK_FAIL" = "0" ] || { echo "FATAL: refusing to package an artifact containing builder paths — see LESSON-41"; exit 1; }
-echo "builder-path audit: no /Users/ paths anywhere in the bundle"
+echo "builder-path audit: no /Users/ path and none of this build's own folders anywhere in the bundle"
 
 # Info.plist — version string clearly identifies the mac port build
 # (SYNC_VALIDATION.md §6: server-side triage must be trivial).
@@ -801,6 +842,38 @@ else
   echo "         --with-visreg or standalone: scripts/visreg.sh"
 fi
 
+echo "=== [5c/7] signed-bundle GUI driver-identity smoke (opt-in; needs a GPU)"
+# Requires a real Apple Silicon GPU/display, so it lives in the certify tier
+# (a headless build box cannot run it). When certifying: the DYLD-stripping
+# behavior of the hardened runtime CANNOT be exercised by headless or ad-hoc
+# runs alone — launch the actual bundle launcher briefly and require the
+# KosmicKrisp identity line (golden rule 11); a silent llvmpipe fallback in the
+# SIGNED bundle must fail the build, never ship.
+# It runs before notarisation, so a bundle that fails it is never submitted.
+if [ "$REPLAY_SMOKE" = "1" ] && [ "$PROFILE" != "bar" ]; then
+  echo "(engine profile has no launcher; the GUI smoke runs in the bar profile"
+  echo " — the engine binaries and dylib closure are identical between the two)"
+elif [ "$REPLAY_SMOKE" = "1" ]; then
+  SMOKELOG=$(mktemp)
+  SMOKEDIR=$(mktemp -d)
+  mkdir -p "$SMOKEDIR/rapid"   # skip the first-run lobby download
+  # stock macOS has no timeout(1); Homebrew coreutils provides gtimeout
+  TIMEOUT_BIN=$(command -v timeout || command -v gtimeout) \
+    || { echo "FATAL: neither timeout nor gtimeout found (brew install coreutils)"; exit 1; }
+  BAR_WRITEDIR_OVERRIDE="$SMOKEDIR" BAR_CONTENT_SCOPE=lobby BAR_ASSUME_CONSENT=1 \
+    "$TIMEOUT_BIN" 90 "$APP/Contents/MacOS/launcher" \
+    > "$SMOKELOG" 2>&1 || true
+  if grep -q "KOSMICKRISP_LOADED" "$SMOKELOG" "$SMOKEDIR/infolog.txt" 2>/dev/null; then
+    echo "bundle GUI smoke: KosmicKrisp identity verified"
+  else
+    echo "FATAL: signed bundle did not load KosmicKrisp (DYLD/rpath regression?)"
+    tail -20 "$SMOKELOG"; exit 1
+  fi
+  rm -rf "$SMOKEDIR" "$SMOKELOG"
+else
+  echo "(skipped — certify tier; needs a GPU. Run 'make certify' on an Apple Silicon Mac)"
+fi
+
 echo "=== [6/7] notarization"
 mkdir -p "$OUT"
 if [ "$PROFILE" = "bar" ]; then
@@ -899,37 +972,6 @@ fi
 echo "dmg: $DMG"
 fi   # PROFILE=bar
 
-echo "=== [6d/7] signed-bundle GUI driver-identity smoke (opt-in; needs a GPU)"
-# Requires a real Apple Silicon GPU/display, so it lives in the certify tier
-# (a headless build box cannot run it). When certifying: the DYLD-stripping
-# behavior of the hardened runtime CANNOT be exercised by headless or ad-hoc
-# runs alone — launch the actual bundle launcher briefly and require the
-# KosmicKrisp identity line (golden rule 11); a silent llvmpipe fallback in the
-# SIGNED bundle must fail the build, never ship.
-if [ "$REPLAY_SMOKE" = "1" ] && [ "$PROFILE" != "bar" ]; then
-  echo "(engine profile has no launcher; the GUI smoke runs in the bar profile"
-  echo " — the engine binaries and dylib closure are identical between the two)"
-elif [ "$REPLAY_SMOKE" = "1" ]; then
-  SMOKELOG=$(mktemp)
-  SMOKEDIR=$(mktemp -d)
-  mkdir -p "$SMOKEDIR/rapid"   # skip the first-run lobby download
-  # stock macOS has no timeout(1); Homebrew coreutils provides gtimeout
-  TIMEOUT_BIN=$(command -v timeout || command -v gtimeout) \
-    || { echo "FATAL: neither timeout nor gtimeout found (brew install coreutils)"; exit 1; }
-  BAR_WRITEDIR_OVERRIDE="$SMOKEDIR" BAR_CONTENT_SCOPE=lobby BAR_ASSUME_CONSENT=1 \
-    "$TIMEOUT_BIN" 90 "$APP/Contents/MacOS/launcher" \
-    > "$SMOKELOG" 2>&1 || true
-  if grep -q "KOSMICKRISP_LOADED" "$SMOKELOG" "$SMOKEDIR/infolog.txt" 2>/dev/null; then
-    echo "bundle GUI smoke: KosmicKrisp identity verified"
-  else
-    echo "FATAL: signed bundle did not load KosmicKrisp (DYLD/rpath regression?)"
-    tail -20 "$SMOKELOG"; exit 1
-  fi
-  rm -rf "$SMOKEDIR" "$SMOKELOG"
-else
-  echo "(skipped — certify tier; needs a GPU. Run 'make certify' on an Apple Silicon Mac)"
-fi
-
 
 echo "=== [7/7] summary"
 echo "profile:   $PROFILE"
@@ -937,6 +979,12 @@ echo "artifact:  $APP"
 echo "bundles:   $ZIP"
 echo "           $DMG"
 echo "signing:   $([ "$IDENTITY" = "-" ] && echo "ad-hoc (local only)" || echo "Developer ID$([ "${#NOTARY_AUTH[@]}" -gt 0 ] && echo " + notarized")")"
+if [ "$PROFILE" = "bar" ]; then
+  echo "online:    $([ "$ENABLE_ONLINE" = "1" ] && echo "ENABLED" || echo "disabled")"
+  echo "content:   ${BAR_CONTENT_TAGS:-standard tags}"
+  echo "messages:  $MESSAGES_CONFIG"
+  echo "updates:   $UPDATE_FEED"
+fi
 echo "certified: $([ "$CERTIFIED" = "1" ] && echo "yes (replay determinism + GPU driver smoke)" || echo "NO (build/package tier only)")"
 if [ "$IDENTITY" != "-" ] && [ "$CERTIFIED" != "1" ]; then
   echo ""
