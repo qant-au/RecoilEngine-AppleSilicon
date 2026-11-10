@@ -34,6 +34,13 @@
 #include "System/Platform/errorhandler.h"
 #include "System/Platform/Threading.h"
 
+#if defined(__APPLE__)
+namespace Threading {
+	// rts/System/Platform/Mac/ThreadSupport.cpp
+	int CaptureThreadStack(NativeThreadHandle thread, void** ips, int maxDepth);
+}
+#endif
+
 #ifndef DEDICATED
 #include "System/Platform/Watchdog.h"
 #endif
@@ -898,9 +905,24 @@ namespace CrashHandler
 			// process and analyse the raw stack trace
 			void* iparray[MAX_STACKTRACE_DEPTH];
 
+#if defined(__APPLE__)
+			// Suspend() does nothing on macOS and thread_unwind() can only walk
+			// the calling thread there, which would label the watchdog's own
+			// frames as the hung thread's. Read the frames from the thread itself.
+			const int numLines = Threading::CaptureThreadStack(ctls->handle, iparray, MAX_STACKTRACE_DEPTH);
+
+			for (int i = 0; i < numLines; i++) {
+				stacktrace.emplace_back();
+				StackFrame& frame = stacktrace.back();
+
+				frame.ip = iparray[i];
+				frame.level = i;
+			}
+#else
 			ctls->Suspend();
 			const int numLines = thread_unwind(&ctls->ucontext, iparray, stacktrace);
 			ctls->Resume();
+#endif
 
 			LOG_L(L_DEBUG, "[%s][2]", __func__);
 
