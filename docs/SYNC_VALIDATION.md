@@ -139,7 +139,7 @@ both players.
 | 1v1, Glacial Gap v1.1 (13.6 min, game `test-31836-b250a16`, recorded 2026-11-08) | this repository, macOS arm64 | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (77 s at 20x) |
 | same | **this repository, amd64 Linux** (gcc 13.1, upstream's build image, emulated) | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (104 s at 20x) |
 
-Run again on 2026-11-10 at commit `07ba437ea9`, after the changes listed in
+Run again on 2026-11-10 at commit `fc948a4f05`, after the changes listed in
 Appendix A and the cleanup of the layer: the same two rows, the same result
 (game end frame 24,503, 0 desyncs, 580 checksums compared), with the libm
 parity gate now at 21 of 21 lines.
