@@ -16,6 +16,8 @@ set -euo pipefail
 BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 DEPS="$BAR/deps"
 LIBCLC_VER="19.1.7"
+# sha256 of the release asset libclc-19.1.7.src.tar.xz (llvm/llvm-project, llvmorg-19.1.7)
+LIBCLC_SHA256="77e2d71f5cea1d0b1014ba88186299d1a0848eb3dc20948baae649db9e7641cb"
 PREFIX="$DEPS/libclc-install"
 PCDIR="$PREFIX/share/pkgconfig"
 
@@ -35,6 +37,11 @@ fi
   if [ ! -f "$SRCDIR/CMakeLists.txt" ]; then
     curl -fL --retry 3 -o "$DEPS/libclc-$LIBCLC_VER.src.tar.xz" \
       "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LIBCLC_VER/libclc-$LIBCLC_VER.src.tar.xz"
+    # libclc is compiled to SPIR-V that Mesa embeds in the driver: verify the
+    # tarball like every other source the build fetches
+    got=$(shasum -a 256 "$DEPS/libclc-$LIBCLC_VER.src.tar.xz" | cut -d' ' -f1)
+    [ "$got" = "$LIBCLC_SHA256" ] || {
+      echo "FATAL: libclc-$LIBCLC_VER.src.tar.xz sha256 is $got, expected $LIBCLC_SHA256"; exit 1; }
     tar -xf "$DEPS/libclc-$LIBCLC_VER.src.tar.xz" -C "$DEPS"
   fi
   rm -rf "$SRCDIR/build"

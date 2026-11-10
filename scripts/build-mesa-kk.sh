@@ -30,6 +30,7 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 DEPS="$BAR/deps"
 MESA_COMMIT="90a959ebba9dbb36f2ea5176091c15d6ebdd0af0"   # mesa-26.3.0-rc3 (was 8f272b1fe18e, 26.2.0-devel, 2026-06-13)
 SPIRV_XLAT_TAG="v19.1.7"
+SPIRV_XLAT_COMMIT="3fac86cf760a4a2510f3c1e76001ea799812a2f6"   # what that tag names
 MESA_PREFIX="${MESA_PREFIX:-$DEPS/mesa-native}"           # driver install prefix
 MESA_SRC="${MESA_SRC:-$DEPS/mesa-src}"
 PATCH_DIR="${MESA_PATCH_DIR:-$BAR/patches/mesa}"
@@ -98,6 +99,10 @@ if [ ! -f "$DEPS/spirv-xlat-install/lib/pkgconfig/LLVMSPIRVLib.pc" ]; then
   rm -rf "$DEPS/spirv-xlat"
   git clone --depth 1 --branch "$SPIRV_XLAT_TAG" \
     https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git "$DEPS/spirv-xlat"
+  # a tag can be moved: build only the commit this script was written against
+  got=$(git -C "$DEPS/spirv-xlat" rev-parse HEAD)
+  [ "$got" = "$SPIRV_XLAT_COMMIT" ] || {
+    echo "FATAL: SPIRV-LLVM-Translator $SPIRV_XLAT_TAG is at $got, expected $SPIRV_XLAT_COMMIT"; exit 1; }
   cmake -S "$DEPS/spirv-xlat" -B "$DEPS/spirv-xlat/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$DEPS/spirv-xlat-install" \
@@ -142,7 +147,9 @@ for p in $(patch_list); do
 done
 
 python3 -m venv "$DEPS/mesa-venv"
-"$DEPS/mesa-venv/bin/pip" install --quiet mako pyyaml packaging
+# pinned versions with their published hashes: Mako generates C that is compiled
+# into the driver
+"$DEPS/mesa-venv/bin/pip" install --quiet --require-hashes -r "$BAR/scripts/mesa-venv-requirements.txt"
 
 # Reproducibility: strip the absolute build-root prefix ($BAR, which
 # contains deps/mesa-src) out of every embedded __FILE__ and DWARF debug path so
