@@ -414,6 +414,7 @@ void MacMetalPresent_PresentBGRA(int w, int h, const void* pixels, bool flipY)
 															  height:(NSUInteger)h
 														   mipmapped:NO];
 		d.usage = MTLTextureUsageShaderRead;
+		[g_staging release];
 		g_staging = [g_device newTextureWithDescriptor:d];
 		g_w = w;
 		g_h = h;
@@ -454,7 +455,9 @@ static void ReleaseIOSurfaceBacking()
         g_ioLocked = false;
     }
     for (int i = 0; i < IO_SLOTS; ++i) {
-        g_ioTexture[i] = nil; // autoreleased
+        // owned (new...): a present block still in flight holds its own retain
+        [g_ioTexture[i] release];
+        g_ioTexture[i] = nil;
         if (g_ioSurface[i]) {
             CFRelease(g_ioSurface[i]);
             g_ioSurface[i] = nullptr;
