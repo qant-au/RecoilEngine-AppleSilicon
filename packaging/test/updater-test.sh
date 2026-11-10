@@ -11,6 +11,7 @@ PASS=0; FAIL=0
 ok()  { PASS=$((PASS+1)); echo "ok   $1"; }
 bad() { FAIL=$((FAIL+1)); echo "FAIL $1"; }
 
+STAGING_BEFORE=$(ls -d "${TMPDIR:-/tmp/}"TemporaryItems/NSIRD_updater_* 2>/dev/null | wc -l | tr -d ' ')
 U="$WORK/updater"
 swiftc -O -o "$U" "$HERE_T/../updater.swift" 2>"$WORK/swiftc.log" || { cat "$WORK/swiftc.log"; echo "FAIL: updater.swift does not compile"; exit 1; }
 
@@ -81,6 +82,16 @@ fresh_install; check "file://$WORK/feed.json" "$WORK/no-key"; rc=$?
   --min-system 99.0 --out "$WORK/feed-min.json" >/dev/null
 fresh_install; check "file://$WORK/feed-min.json"; rc=$?
 [ "$rc" = "0" ] && [ "$(installed)" = "0.13" ] && ok "update for a newer macOS: not offered" || bad "min-system: exit $rc"
+
+# an app this user cannot move is not offered an update it could not install
+fresh_install; chmod 555 "$WORK/inst/Accurona.app"; check "file://$WORK/feed.json"; rc=$?
+chmod 755 "$WORK/inst/Accurona.app"
+[ "$rc" = "0" ] && [ "$(installed)" = "0.13" ] && grep -q "cannot be moved" "$WORK/err" \
+  && ok "immovable app: update not offered, app kept" || bad "immovable app: exit $rc, installed $(installed), $(cat "$WORK/err")"
+
+# no refusal or failure above may leave an unpacked update behind
+LEFT=$(ls -d "${TMPDIR:-/tmp/}"TemporaryItems/NSIRD_updater_* 2>/dev/null | wc -l | tr -d ' ')
+[ "$LEFT" = "$STAGING_BEFORE" ] && ok "no staging folder left behind" || bad "staging folders left: $LEFT (were $STAGING_BEFORE)"
 
 # launcher wiring: the check runs before the message config and quits on 3
 grep -q '"\$HERE/updater" check' "$HERE_T/../launcher.sh" && ok "launcher calls the updater" || bad "launcher does not call the updater"

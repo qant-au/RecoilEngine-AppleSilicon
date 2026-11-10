@@ -175,6 +175,11 @@ let parent = appURL.deletingLastPathComponent()
 guard FileManager.default.isWritableFile(atPath: parent.path) else {
     log("\(parent.path) is not writable; not offering an in-app update"); exit(0)
 }
+// Moving the bundle aside also needs write access to the bundle itself (an app
+// put in place by another account has none): do not offer what cannot be done.
+guard FileManager.default.isWritableFile(atPath: appURL.path) else {
+    log("\(appURL.path) cannot be moved by this user; not offering an in-app update"); exit(0)
+}
 
 let ui = !auto
 var app: NSApplication?
@@ -197,8 +202,10 @@ func present(_ alert: NSAlert) -> NSApplication.ModalResponse {
     app?.activate(ignoringOtherApps: true)
     return alert.runModal()
 }
+var stagingDir: URL?   // set once the update is unpacked; removed on every refusal
 func failNotice(_ why: String) -> Never {
     log(why)
+    if let s = stagingDir { try? FileManager.default.removeItem(at: s) }
     if ui {
         let a = NSAlert()
         a.messageText = "The update could not be installed"
@@ -295,6 +302,7 @@ let fm = FileManager.default
 guard let stage = try? fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: appURL, create: true) else {
     failNotice("There was nowhere to unpack the update.")
 }
+stagingDir = stage
 let zipFile = stage.appendingPathComponent("update.zip")
 let unpacked = stage.appendingPathComponent("unpacked")
 do { try data.write(to: zipFile) } catch { failNotice("The update could not be saved to disk.") }
@@ -321,18 +329,25 @@ if let team = teamID(appURL.path), teamID(newApp) != team {
 // moves the new one into place (putting the old one back if that fails), then
 // opens it. It outlives this process and the launcher.
 let backup = stage.appendingPathComponent("previous.app").path
+// If the swap cannot be done the installed app is left as it was, the staging
+// folder is removed, this version is not offered again on the next launch (it
+// would fail the same way and quit the app each time), and the app is reopened.
 let script = """
-pid="$1"; old="$2"; new="$3"; backup="$4"; relaunch="$5"; stage="$6"
+pid="$1"; old="$2"; new="$3"; backup="$4"; relaunch="$5"; stage="$6"; seen="$7"; version="$8"
 if [ -n "$pid" ]; then n=0; while kill -0 "$pid" 2>/dev/null && [ $n -lt 600 ]; do sleep 0.2; n=$((n+1)); done; fi
-mv "$old" "$backup" || exit 1
-if mv "$new" "$old"; then rm -rf "$stage"; else mv "$backup" "$old"; exit 1; fi
+if mv "$old" "$backup"; then
+  if mv "$new" "$old"; then rm -rf "$stage"; [ "$relaunch" = "1" ] && open "$old"; exit 0; fi
+  mv "$backup" "$old"
+fi
+rm -rf "$stage"
+[ -n "$seen" ] && printf '%s' "$version" > "$seen"
 [ "$relaunch" = "1" ] && open "$old"
-exit 0
+exit 1
 """
 let p = Process()
 p.executableURL = URL(fileURLWithPath: "/bin/sh")
 p.arguments = ["-c", script, "accurona-swap", arg("--wait-pid") ?? "", appURL.path, newApp, backup,
-               has("--no-relaunch") ? "0" : "1", stage.path]
+               has("--no-relaunch") ? "0" : "1", stage.path, seenFile ?? "", feed.version]
 p.standardOutput = FileHandle.nullDevice
 p.standardError = FileHandle.nullDevice
 do { try p.run() } catch { failNotice("The update could not be started (\(error)).") }
