@@ -107,6 +107,25 @@ func insideWriteDir(_ rel: String) -> URL? {
     return (u.path.hasPrefix(writeDir.path + "/") && staysInsideWriteDir(u)) ? u : nil
 }
 
+// ---- resource downloads: where from and where to ------------------------------
+// A resource download writes remote bytes to disk on the word of the lobby,
+// whose Lua comes from an unsigned content network. BAR's lobby asks for them
+// from its own services only (the widget hub, the data marts, the files CDN:
+// all under beyondallreason.dev, as is every download host in the official
+// launcher config) and writes to three folders. Anything else is refused and
+// logged, so a new use by the lobby shows up as one clear log line. A redirect
+// issued by one of those hosts is followed, as a CDN needs.
+let resourceHostDomain = "beyondallreason.dev"
+let resourceFolders = ["LuaUI/Widgets", "plugins", "data-processing-main"]
+func resourceHostAllowed(_ host: String?) -> Bool {
+    guard let h = host?.lowercased() else { return false }
+    return h == resourceHostDomain || h.hasSuffix("." + resourceHostDomain)
+}
+func resourceDestinationAllowed(_ dest: URL) -> Bool {
+    let p = dest.standardizedFileURL.path
+    return resourceFolders.contains { p.hasPrefix(writeDir.path + "/" + $0 + "/") }
+}
+
 // ---- connection --------------------------------------------------------------
 // ---- peer check ---------------------------------------------------------------
 // The lobby runs inside the engine, so the only process that may talk to the
@@ -342,6 +361,14 @@ func startNextDownload() {
               let src = URL(string: urlS), src.scheme == "https",
               let dest = (r["destination"] as? String).flatMap(insideWriteDir) else {
             log("Download resource \(name): needs an https url and a destination inside the write dir")
+            current = (name, nil, nil); finishDownload(name, success: false, aborted: false); return
+        }
+        guard resourceHostAllowed(src.host) else {
+            log("Download resource \(name): \(src.host ?? "?") is not one of BAR's download hosts, refused")
+            current = (name, nil, nil); finishDownload(name, success: false, aborted: false); return
+        }
+        guard resourceDestinationAllowed(dest) else {
+            log("Download resource \(name): \(r["destination"] as? String ?? "?") is not a folder the lobby downloads into, refused")
             current = (name, nil, nil); finishDownload(name, success: false, aborted: false); return
         }
         let extract = (r["extract"] as? Bool) ?? false

@@ -196,6 +196,8 @@ if [ ! -f "$BYAR_CFG" ]; then
 -- packaging/launcher.sh. Only `firsttimesetupDone` is pre-set, so BAR does not
 -- misclassify Apple Silicon and disable water/shadows. No widget order is
 -- specified, so every widget keeps its stock default state.
+-- allowUserWidgets stays true on purpose: it is BAR's own default, and the
+-- lobby's widget hub installs widgets under LuaUI/Widgets through the bridge.
 return {
 	allowUserWidgets = true,
 	data = {

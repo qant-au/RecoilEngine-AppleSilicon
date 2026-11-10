@@ -173,8 +173,29 @@ python3 "$WORK/http.py" "$WD/sl-connection.json" && ! grep -q 'http-probe' "$WOR
 R=$(send '{"name":"Download","command":{"name":"x","type":"resource","resource":{"url":"http://example.com/a","destination":"a"}}}')
 echo "$R" | grep -q '"DownloadFinished"' && echo "$R" | grep -q '"isSuccess":false' && ok "non-https resource refused" || no "resource http: $R"
 
-R=$(send '{"name":"Download","command":{"name":"y","type":"resource","resource":{"url":"https://example.com/a","destination":"../../escape"}}}')
-echo "$R" | grep -q '"isSuccess":false' && ok "resource destination outside write dir refused" || no "resource traversal: $R"
+R=$(send '{"name":"Download","command":{"name":"y","type":"resource","resource":{"url":"https://widget-hub.beyondallreason.dev/a","destination":"../../escape"}}}')
+echo "$R" | grep -q '"isSuccess":false' && grep -q 'Download resource y: needs an https url and a destination inside the write dir' "$WORK/bridge.log" \
+  && ok "resource destination outside write dir refused" || no "resource traversal: $R"
+
+# only BAR's own download hosts, and only the folders its lobby downloads into
+# (all four are refused before any request is made, so this needs no network)
+for host in example.com beyondallreason.dev.example.com evilbeyondallreason.dev; do
+  R=$(send '{"name":"Download","command":{"name":"h-'"$host"'","type":"resource","resource":{"url":"https://'"$host"'/a.zip","destination":"LuaUI/Widgets/a","extract":true}}}')
+  echo "$R" | grep -q '"isSuccess":false' && grep -q "Download resource h-$host: $host is not one of BAR's download hosts, refused" "$WORK/bridge.log" \
+    && ok "resource from $host refused" || no "resource host $host: $R"
+done
+R=$(send '{"name":"Download","command":{"name":"f","type":"resource","resource":{"url":"https://widget-hub.beyondallreason.dev/a.zip","destination":"AI/Skirmish/a","extract":true}}}')
+echo "$R" | grep -q '"isSuccess":false' && grep -q 'Download resource f: AI/Skirmish/a is not a folder the lobby downloads into, refused' "$WORK/bridge.log" \
+  && ok "resource into a folder the lobby does not use refused" || no "resource folder: $R"
+[ ! -e "$WD/AI" ] && [ ! -e "$WD/LuaUI/Widgets/a" ] && ok "refused downloads wrote nothing" || no "a refused download left files"
+# The allowed case makes one real request to BAR's widget hub (the file its
+# lobby fetches whenever the plugins window opens), so it runs only on request:
+#   SL_BRIDGE_NET_TEST=1 packaging/test/sl-bridge-test.sh
+if [ "${SL_BRIDGE_NET_TEST:-0}" = "1" ]; then
+  R=$(send '{"name":"Download","command":{"name":"plugin_manifest","type":"resource","resource":{"url":"https://widget-hub.beyondallreason.dev/manifests.json","destination":"LuaUI/Widgets/manifests.json","extract":false}}}')
+  echo "$R" | grep -q '"isSuccess":true' && [ -s "$WD/LuaUI/Widgets/manifests.json" ] \
+    && ok "resource from BAR's widget hub into LuaUI/Widgets downloaded" || no "allowed resource download: $R"
+fi
 
 R=$(send '{"name":"Download","command":{"name":"z","type":"engine"}}')
 echo "$R" | grep -q '"isSuccess":false' && ok "engine download reported unsupported" || no "engine dl: $R"
