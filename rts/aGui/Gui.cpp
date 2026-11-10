@@ -132,6 +132,10 @@ bool Gui::HandleEvent(const SDL_Event& ev)
 		if (event.type == SDL_MOUSEMOTION) {
 			event.motion.x = int(std::lround(event.motion.x * sx));
 			event.motion.y = int(std::lround(event.motion.y * sy));
+			// relative motion too, or a dragged window or scrollbar moves at a
+			// fraction of the pointer's speed on a HiDPI display
+			event.motion.xrel = int(std::lround(event.motion.xrel * sx));
+			event.motion.yrel = int(std::lround(event.motion.yrel * sy));
 		} else {
 			event.button.x = int(std::lround(event.button.x * sx));
 			event.button.y = int(std::lround(event.button.y * sy));
