@@ -210,6 +210,8 @@ Linux client and a Windows client and look at each:
   a look at the pictures. Anything in shared code: the Linux and Windows
   check. Anything near synced code: [DETERMINISM.md](DETERMINISM.md).
 - **One concern per commit**, and a message that says what changed and why.
+- **Carry other people's commits with `git cherry-pick -x`**, so the author
+  and the commit it came from stay exact.
 - **Keep reports diagnosable.** Every engine log names the package version,
   the engine version and the game content. When a bug cannot be reproduced,
   add the log lines that would identify it next time.
