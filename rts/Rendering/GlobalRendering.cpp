@@ -245,7 +245,15 @@ CR_REG_METADATA(CGlobalRendering, (
 
 	CR_IGNORED(windowTitleBase),
 	CR_IGNORED(glExtensions),
-	CR_IGNORED(glTimerQueries)
+	CR_IGNORED(glTimerQueries),
+	CR_IGNORED(gpuStampLabels),
+	CR_IGNORED(gpuStampCounts),
+	CR_IGNORED(gpuStampNames),
+	CR_IGNORED(gpuFrameTimeNs),
+	CR_IGNORED(gpuStampsSkipped),
+	CR_IGNORED(gpuTimersEnabled),
+	CR_IGNORED(gpuTimersOverlay),
+	CR_IGNORED(gpuTimersSplit)
 ))
 
 
