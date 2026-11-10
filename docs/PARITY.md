@@ -33,7 +33,7 @@ has not been re-checked after a change to the thing it measures is stale.
 | Simulation on this repository's own Linux build | — | on 2026.07.04: both replays, 0 desyncs, on amd64 Linux built from this tree; not re-run on 2026.09.02 | **stale** (re-run before release) | `docs/SYNC_VALIDATION.md` §3a |
 | libm / FP parity | gcc fleet build | gcc-15 dbl-64 swap; 9/9 hashes; streflop BIT-EXACT vs SSE (47,852) and NEON (52,080) | **match** | `scripts/build-engine.sh` gate; `scripts/run-synctest.sh` |
 | Live multiplayer | BAR servers | LAN and cross-platform play proven by the original port; **online disabled** in builds from this repository | **gap (policy)**: needs BAR's approval for this repository | issue #6 |
-| Unit tests | 28/29 on Linux (testCreg: upstream `paletteIndex`, fixed on master) | 28/29, same single failure | **match** | `scripts/run-unit-tests.sh`; `scripts/check-nonmac.sh linux` |
+| Unit tests | 29/30 on Linux (testCreg: an unregistered `CProjectile` member in upstream, one byte "between drawSorted & blockPreciseCol") | 29/30, same single failure | **match** | `scripts/run-unit-tests.sh`; `scripts/check-nonmac.sh linux` |
 | Static libraries (image, archive, audio decoding) | spring-static-libs: zlib 1.3.1, libpng 1.6.50, giflib 5.2.2, jpeg 9f, libtiff 4.7.0, DevIL 1.8.0, libogg 1.3.6, libvorbis 1.3.7, xz 5.8.1, minizip-ng 4.0.10 | same versions, sha256 pins and flags, linked statically | **match** (macOS-only build adjustments documented in `docs/VERSIONS.md`) | `scripts/build-static-libs.sh` |
 | SDL2 | Linux: the OS's SDL2; Windows: mingwlibs | SDL 2.32.10 from source | **equivalent** (same API and major version; exact version differs by platform upstream too) | `scripts/build-sdl2.sh` |
 | OpenAL | Linux: the OS's OpenAL; Windows: openal-soft (mingwlibs) | openal-soft 1.25.2 from source, CoreAudio backend | **equivalent** | `scripts/build-shared-libs.sh` |
@@ -55,7 +55,7 @@ has not been re-checked after a change to the thing it measures is stale.
 scripts/preflight.sh                       # toolchain
 scripts/build-engine.sh                    # engine + libm parity gate
 scripts/run-synctest.sh                    # streflop vs x86 SSE and NEON references
-scripts/run-unit-tests.sh                  # ctest, 28/29 expected
+scripts/run-unit-tests.sh                  # ctest, 29/30 expected
 scripts/gpu-smoke.sh                       # driver renders, renderer string
 scripts/replay-check.sh <fleet-demo.sdfz>  # simulation vs the fleet, default 20x
 scripts/check-nonmac.sh                    # Linux + Windows builds, Linux ctest
