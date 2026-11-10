@@ -19,7 +19,10 @@ func arg(_ name: String) -> String? {
 }
 
 let app = NSApplication.shared
-app.setActivationPolicy(.regular)
+// .accessory, like the error and progress windows: a .regular helper started
+// by the launcher is not allowed to take focus on current macOS, and its alert
+// then never reaches the screen while the launcher waits on it.
+app.setActivationPolicy(.accessory)
 app.activate(ignoringOtherApps: true)
 
 // Run an alert reliably in FRONT of every other app. activate() alone races

@@ -421,7 +421,9 @@ final class MessageDialog: NSObject {
 }
 
 let app = NSApplication.shared
-if !dryRun { app.setActivationPolicy(.regular) }
+// .accessory for the same reason as consent-dialog.swift: a .regular helper may
+// not be allowed to take focus, and its window then stays off screen.
+if !dryRun { app.setActivationPolicy(.accessory) }
 var mustQuit = false
 
 for m in messages {

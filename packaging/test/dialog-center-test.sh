@@ -48,7 +48,21 @@ for w in list {
     let r = CGRect(x: x, y: y, width: ww, height: hh)
     if best == nil || r.width * r.height > best!.width * best!.height { best = r }
 }
-guard let r = best else { print("OFFSET nowindow nowindow"); exit(1) }
+guard var r = best else { print("OFFSET nowindow nowindow"); exit(1) }
+// An NSAlert is put on screen inside a larger backing window that pads it evenly
+// on every side; the alert's own window is the one the helper positions, and it
+// is not itself listed as on screen. Measure that inner window when the process
+// has one sitting concentrically inside the visible one.
+let every = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in every {
+    guard (w[kCGWindowOwnerPID as String] as? Int32) == pid,
+          let b = w[kCGWindowBounds as String] as? [String: CGFloat],
+          let x = b["X"], let y = b["Y"], let ww = b["Width"], let hh = b["Height"],
+          ww > 100, hh > 60 else { continue }
+    let inner = CGRect(x: x, y: y, width: ww, height: hh)
+    if inner.width < r.width, inner.height < r.height, r.contains(inner),
+       abs(inner.midX - r.midX) <= 1, abs(inner.midY - r.midY) <= 1 { r = inner }
+}
 let akY = zero.frame.height - (r.origin.y + r.height)   // CG top-left -> AppKit bottom-left
 let dx = (r.origin.x + r.width/2) - vis.midX
 let dy = akY - (vis.minY + (vis.height - r.height) * 0.75)
