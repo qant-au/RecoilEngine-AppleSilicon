@@ -142,8 +142,10 @@ sign-off before publishing the release.
 signed feed, by default
 `https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json`
 (`--update-feed` on `release-build.sh` changes it). When the private release
-key is at `~/.accurona/update-signing.key`, `make app` writes
-`release-artifacts/appcast.json` beside the zip. Publish both as assets of the
+key is at `~/.accurona/update-signing.key`, a Developer ID signed, notarized
+build (`make release`) writes `release-artifacts/appcast.json` beside the zip.
+An ad-hoc build (`make app`) never writes one, because the feed signature does
+not expire and would offer that build to every older copy. Publish both as assets of the
 release tagged `v<PORT_VERSION>`, and every install older than it offers the
 update. The app only installs an archive that verifies against the public key in
 `packaging/update-public-key`, has our bundle identifier and the promised

@@ -801,7 +801,14 @@ else
 fi
 
 if [ "$PROFILE" = "bar" ]; then
-  if [ -f "$UPDATE_SIGNING_KEY" ]; then
+  # The feed signature is the one thing installed copies trust, and it never
+  # expires, so the release key signs only what is meant to go out: a Developer
+  # ID signed, notarized build. A local ad-hoc build must not leave behind a
+  # feed that would install it on every older copy.
+  rm -f "$OUT/appcast.json"
+  if [ "$IDENTITY" = "-" ] || [ "${#NOTARY_AUTH[@]}" -eq 0 ]; then
+    echo "(appcast.json not written: the update feed is signed only for a Developer ID signed, notarized build)"
+  elif [ -f "$UPDATE_SIGNING_KEY" ]; then
     "$MACOS/updater" sign --key "$UPDATE_SIGNING_KEY" --archive "$ZIP" --version "$PORTVER" \
       --url "$UPDATE_DOWNLOAD_BASE/v${PORTVER}/$(basename "$ZIP")" --min-system "${MACOSX_DEPLOYMENT_TARGET}" \
       --out "$OUT/appcast.json" || { echo "FATAL: could not sign the update feed"; exit 1; }
