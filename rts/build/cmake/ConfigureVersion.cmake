@@ -44,8 +44,11 @@ if    (EXISTS "${SOURCE_ROOT}/PINNED_VERSION")
 		set(_spring_version_pinned TRUE)
 	endif ()
 endif ()
-if    (NOT _spring_version_pinned)
-	git_util_describe(SPRING_ENGINE_NEAREST_TAG "${SOURCE_ROOT}" "[0-9]*" --abbrev=0)
+# macOS only: Linux and Windows builds of this tree keep upstream's git-describe
+# string, so they never present themselves as the official release. The glob is
+# the release-tag shape (YYYY.MM.DD), so a port tag such as 0.14 cannot match.
+if    ((APPLE OR CMAKE_HOST_APPLE) AND NOT _spring_version_pinned)
+	git_util_describe(SPRING_ENGINE_NEAREST_TAG "${SOURCE_ROOT}" "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]*" --abbrev=0)
 	if    (SPRING_ENGINE_NEAREST_TAG)
 		message(STATUS "Engine version auto-derived from nearest release tag: ${SPRING_ENGINE_NEAREST_TAG} (git-describe was \"${SPRING_ENGINE_VERSION}\")")
 		set(SPRING_ENGINE_VERSION "${SPRING_ENGINE_NEAREST_TAG}")
