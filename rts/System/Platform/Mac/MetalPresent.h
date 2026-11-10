@@ -74,6 +74,13 @@ bool MacMetalPresent_PresentPixelBuffer(void* base, size_t len, int w, int h,
 // called before the caller unmaps/deletes the underlying PBOs (resize).
 void MacMetalPresent_InvalidatePixelBuffers(void);
 
+// True while a queued present is still reading this buffer: the caller must
+// not write into it yet.
+bool MacMetalPresent_PixelBufferBusy(void* base);
+
+// Wait for queued presents to finish. Call before the window is destroyed.
+void MacMetalPresent_Shutdown(void);
+
 #ifdef __cplusplus
 }
 #endif
