@@ -97,7 +97,7 @@ bit-exact with the fleet. Linux runs used upstream's own build image under
 emulation. Streflop: `scripts/run-synctest.sh` is BIT-EXACT against the x86
 SSE reference (47,852 common tests) and the NEON reference (52,080).
 
-### 3b. Engine 2026.09.02, verified 2026-11-10 (this repository, commit `9978e12570`)
+### 3b. Engine 2026.09.02, verified 2026-11-10 (this repository, commit `5ae54cd976`)
 
 After merging upstream 2026.09.02 into the macOS layer, a public fleet replay
 recorded on 2026.09.02 (BAR's Engine Test channel) was re-simulated on the
@@ -183,16 +183,15 @@ of these paths changes:
 
     git diff --stat <upstream tag> HEAD -- rts/Sim rts/lib/streflop \
         'rts/Lua/LuaSynced*.cpp' rts/System/Sync rts/System/FastMath.h \
-        rts/Net/GameServer.cpp rts/Game/WaitCommandsAI.cpp
+        rts/Net/GameServer.cpp
 
-Measured against `2026.09.02` at commit `9978e12570`. `rts/lib/streflop` is
+Measured against `2026.09.02` at commit `5ae54cd976`. `rts/lib/streflop` is
 unchanged: it is the same submodule commit as the tag.
 
 | Change | Files | Applies to | Why the fleet's x86 results are unchanged |
 |---|---|---|---|
 | COB `SHIELD_POWER` has a defined result outside `int` range | `rts/Sim/Units/Scripts/UnitScript.cpp` | every platform | In range it is the same conversion. Out of range, or for NaN, x86 already produces `INT_MIN` (`cvttss2si`); the change returns that value explicitly. On arm64 it replaces a saturated `INT_MAX`, which was a real divergence from the fleet (upstream issue #3421). |
 | Heading casts go through `int` | `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | every platform | Below 2^31 it is the same instruction and the same truncation on x86, and arm64 now gives the same value. Known limit: from 2^31 upward x86 gives 0 and arm64 gives -1. Game Lua would have to pass such a heading on purpose. |
-| Destructors skip clean-up on an object that was never initialised | `rts/Sim/Features/Feature.cpp`, `rts/Sim/MoveTypes/GroundMoveType.cpp`, `rts/Sim/MoveTypes/ScriptMoveType.cpp`, `rts/Sim/Projectiles/WeaponProjectiles/WeaponProjectile.cpp` and `.h`, `rts/Sim/Units/CommandAI/BuilderCAI.cpp`, `rts/Sim/Units/CommandAI/MobileCAI.cpp`, `rts/Sim/Units/UnitTypes/ExtractorBuilding.cpp`, `rts/Sim/Weapons/PlasmaRepulser.cpp`, `rts/Sim/Weapons/Weapon.cpp`, `rts/Game/WaitCommandsAI.cpp` | every platform | The guarded pointers are set on every object a running game constructs. They are null only on the default instances the save-game loader creates, so the new branches run only while a failed load is being unwound. Downstream only: upstream declined this change (#3280). |
 | QTPFS shuts down only the systems that were created | `rts/Sim/Path/QTPFS/PathManager.cpp` | every platform | Destructor only, and both systems exist before the first frame of any game (upstream PR #3694, open). |
 | FPU control check on NEON | `rts/System/Sync/FPUCheck.cpp` | arm64 only | Not compiled on x86. On arm64 it re-applies streflop's own settings when the rounding mode or the flush-to-zero bit has drifted (upstream PR #3689, open). |
 | `SPRING_DEMO_SPEED` | `rts/Net/GameServer.cpp` | every platform, demo playback only | Changes playback pacing, not simulated state. Sync is checked the same way at any speed. |
@@ -210,7 +209,7 @@ rests on them:
 Now upstream, and no longer part of the layer (earlier versions of this
 register listed them): the COB float-to-short casts (#3075), the
 `GroundMoveType` heading cast (#3342) and `views::enumerate` compatibility
-(#3289). The original port's glibc dbl-64 import and its `math::floor`
+(#3289). Dropped because upstream declined it: the destructor null guards for a failed save-game load (#3280; upstream's own answer, #3277, is in the tag). The original port's glibc dbl-64 import and its `math::floor`
 emulation belonged to the 2025.06.24 lane and are not in this tree: here
 `math::floor(float)` is streflop's software floor on every architecture.
 
