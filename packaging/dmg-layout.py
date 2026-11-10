@@ -31,10 +31,21 @@ def main() -> None:
     if not os.path.isfile(bg):
         sys.exit(f"FATAL: {bg} missing")
 
+    # The alias must name the picture relative to the volume. Mounted through
+    # a symlinked path it comes out as a chain of ".." into the builder's
+    # folders, and the installer window then opens with no background.
+    bg_alias = Alias.for_file(bg)
+    bg_path = bg_alias.target.posix_path
+    if isinstance(bg_path, bytes):
+        bg_path = bg_path.decode("utf-8", "replace")
+    if bg_path != "/.background/background.png":
+        sys.exit(f"FATAL: background alias points at {bg_path!r}; "
+                 "mount the image at a physical path (pwd -P)")
+
     icvp = {
         "viewOptionsVersion": 1,
         "backgroundType": 2,
-        "backgroundImageAlias": Alias.for_file(bg).to_bytes(),
+        "backgroundImageAlias": bg_alias.to_bytes(),
         "backgroundColorRed": 1.0, "backgroundColorGreen": 1.0, "backgroundColorBlue": 1.0,
         "arrangeBy": "none",
         "gridOffsetX": 0.0, "gridSpacing": 100.0,
