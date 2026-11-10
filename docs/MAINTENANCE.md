@@ -104,7 +104,7 @@ location is decided).
    stop — that is a determinism risk, not a merge chore (PORTING_PRINCIPLES §2).
 4. **Re-run the gates** (all must pass on `macos-NEW` before it is a pin):
    ```sh
-   scripts/build-engine.sh                 # + libm fleet-parity hash gate (9/9)
+   scripts/build-engine.sh                 # + libm fleet-parity hash gate
    # streflop cross-arch sync-test: BIT-EXACT vs both committed references
    # replay determinism: REPLAY_SYNC_OK on a NEW-version demo
    make certify                            # full packaging + GPU + replay cert

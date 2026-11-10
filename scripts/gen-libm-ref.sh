@@ -2,7 +2,7 @@
 # Generate the fleet libm reference that build-engine.sh's parity gate compares
 # against: testkit/libm-refs/double-fn-vm26.txt (submodule streflop lane).
 #
-# Why: the gate proves the port's streflop double-precision libm hashes 9/9
+# Why: the gate proves the port's streflop double-precision libm hashes
 # identical to the x86 fleet's. Its reference used to exist only on the
 # maintainer's machine, so every fresh clone stopped at "FATAL: libm parity gate
 # cannot run" (issue #17). A reference generated from THIS build would be
@@ -59,8 +59,9 @@ timeout 120 /out/dfp-fleet
 ' > "$OUT.tmp"
 
 echo "=== [3/3] sanity ==="
-[ "$(wc -l < "$OUT.tmp" | tr -d ' ')" = 9 ] \
-  || { echo "FATAL: expected 9 hash lines, got:"; cat "$OUT.tmp"; rm -f "$OUT.tmp"; exit 1; }
+WANT=$(grep -cE 'printf\("[a-z0-9]+ +%016llx|sweep\("' "$BAR/scripts/dfp-small.cpp")
+[ "$(wc -l < "$OUT.tmp" | tr -d ' ')" = "$WANT" ] \
+  || { echo "FATAL: expected $WANT hash lines, got:"; cat "$OUT.tmp"; rm -f "$OUT.tmp"; exit 1; }
 mv "$OUT.tmp" "$OUT"
 echo "wrote $OUT (streflop $(git -C rts/lib/streflop rev-parse --short HEAD), image ${IMAGE##*@})"
 cat "$OUT"

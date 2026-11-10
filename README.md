@@ -98,7 +98,7 @@ from the maintainer:
 
 - **Bit-exact cross-architecture simulation** — the core of the port: the
   glibc dbl-64 libm compiled in for fleet-parity `double` math (guarded by a
-  9/9 libm hash gate in every build), x86 conversion semantics reproduced on
+  libm hash gate in every build), x86 conversion semantics reproduced on
   arm64, `-ffp-contract=off` enforced globally, and a UB sweep of synced code
   — then certified bit-exact over full-length 8v8 replays and live
   cross-platform matches ([SYNC_VALIDATION.md](docs/SYNC_VALIDATION.md); the

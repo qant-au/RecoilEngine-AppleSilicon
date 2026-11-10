@@ -190,7 +190,7 @@ fi
 #    replay certification is the parity proof of record.
 #  - submodule lane (2026.06.08+): fleet gcc builds use
 #    -fsingle-precision-constant (gcc-only); recompile dbl-64 objects with
-#    homebrew gcc and relink. Gate: 9/9 hash match vs the gcc x86 VM reference.
+#    homebrew gcc and relink. Gate: every hash line matches the gcc x86 reference.
 if [ -f "$SRC/rts/lib/streflop/libm/dbl-64/w_aliases.cpp" ]; then
   LANE=glibc-import
   REF="$BAR/testkit/libm-refs/double-fn-2025lane-clang.txt"
@@ -200,7 +200,18 @@ else
   REF="$BAR/testkit/libm-refs/double-fn-vm26.txt"
   "$BAR/scripts/gcc-dbl64-swap.sh" "$BUILD"
   for tgt in spring spring-headless; do
-    (cd "$BUILD" && eval "$(ninja -t commands "$tgt" | tail -1)")
+    LINK_CMD=$(cd "$BUILD" && ninja -t commands "$tgt" | tail -1)
+    case "$LINK_CMD" in
+      *" -o $tgt "*|*" -o $tgt") ;;
+      *) echo "FATAL: cannot find the link step for $tgt, so it cannot be relinked against the gcc dbl-64 objects"; exit 1;;
+    esac
+    (cd "$BUILD" && eval "$LINK_CMD")
+    # The gate below tests the archive. These two checks tie the binary that
+    # ships to it: not older than the swapped archive, and any dbl-64 function
+    # it links comes from the gcc-built objects (scripts/check-dbl64-marker.sh).
+    [ "$BUILD/$tgt" -ot "$BUILD/rts/lib/streflop/libstreflop.a" ] \
+      && { echo "FATAL: $tgt is older than the swapped streflop archive (the relink did not run)"; exit 1; }
+    "$BAR/scripts/check-dbl64-marker.sh" "$BUILD/$tgt" || exit 1
   done
 fi
 
@@ -234,12 +245,17 @@ if true; then
     || { echo "FATAL: neither timeout nor gtimeout found (brew install coreutils)"; exit 1; }
   "$TIMEOUT_BIN" 120 "$BUILD/dfp-verify" > "$BUILD/dfp-verify.txt" \
     || { echo "FATAL: dfp-verify crashed or hung (libm landmine?)"; exit 1; }
-  if ! diff -q "$BUILD/dfp-verify.txt" "$REF" >/dev/null; then
+  # Every reference line must be reproduced exactly. The submodule lane's
+  # reference covers every line the program prints; the glibc-import lane's
+  # older baseline covers the first nine.
+  REF_LINES=$(grep -c . "$REF"); OUT_LINES=$(grep -c . "$BUILD/dfp-verify.txt")
+  if [ -n "$(grep -Fxv -f "$BUILD/dfp-verify.txt" "$REF")" ] \
+     || { [ "$LANE" = submodule ] && [ "$REF_LINES" != "$OUT_LINES" ]; }; then
     echo "FATAL: streflop archive does not match $LANE lane libm hashes ($REF):"
     paste "$BUILD/dfp-verify.txt" "$REF"
     exit 1
   fi
-  echo "libm parity gate ($LANE): OK (9/9 hash match vs $(basename "$REF"))"
+  echo "libm parity gate ($LANE): OK ($REF_LINES/$REF_LINES hash match vs $(basename "$REF"))"
 fi
 echo "NOTE: do not run bare 'ninja' in $BUILD afterwards — it clobbers the"
 echo "gcc-swapped dbl-64 objects. Always rebuild via this script."

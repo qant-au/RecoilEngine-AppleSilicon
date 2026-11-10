@@ -4,7 +4,7 @@
 # Produces Accurona.app (staged, signed, optionally notarized) from
 # the pinned engine tree + pinned/patched Mesa:
 #   build (via scripts/build-engine.sh: -O3 RELWITHDEBINFO, gcc dbl-64 swap,
-#   dfp-verify 9/9 fleet-parity gate) → [sync-test] → [replay certification] →
+#   dfp-verify fleet-parity gate) → [sync-test] → [replay certification] →
 #   bundle staging → license collection + license-audit → codesign (hardened
 #   runtime, get-task-allow FORBIDDEN) → [visreg on the signed bundle] →
 #   notarize+staple (when identity provided) → ditto zip.
@@ -276,6 +276,13 @@ if [ "$PROFILE" = "engine" ]; then
   cp "$BUILD/spring-dedicated" "$MACOS/spring-dedicated"
   cp "$BUILD/libunitsync.dylib" "$MACOS/libunitsync.dylib"
 fi
+# The libm parity gate tested the streflop archive. Check the staged engine
+# binaries themselves, before anything strips them: a double libm function in
+# one of them must come from the gcc-built objects.
+STAGED_ENGINES=("$MACOS/spring")
+[ -f "$MACOS/spring-headless" ] && STAGED_ENGINES+=("$MACOS/spring-headless")
+"$BAR/scripts/check-dbl64-marker.sh" "${STAGED_ENGINES[@]}" \
+  || { echo "FATAL: a staged engine binary does not match the verified streflop build"; exit 1; }
 if [ "$PROFILE" = "bar" ]; then
   # ---- BAR helper: launcher, content download/update, native helpers ----
   cp "$PKG/download-content.sh" "$RESOURCES/"

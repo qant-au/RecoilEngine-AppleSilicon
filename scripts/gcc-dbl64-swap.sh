@@ -52,6 +52,12 @@ FLAGS=(
   -w -Wno-narrowing
 )
 
+# Marker: every swapped object carries this string and no clang-built object
+# does, so a linked binary can be checked for it (scripts/check-dbl64-marker.sh).
+MARKER_H=$OBJDIR/dbl64-gcc-marker.h
+printf '%s\n' 'static const char streflop_dbl64_gcc_marker[] __attribute__((used)) = "streflop-dbl64-gcc-swap " __VERSION__;' > "$MARKER_H"
+FLAGS+=(-include "$MARKER_H")
+
 n=0
 for src in "$STREF"/libm/dbl-64/*.cpp; do
   obj=$OBJDIR/$(basename "$src").o
