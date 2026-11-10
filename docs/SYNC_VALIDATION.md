@@ -8,8 +8,11 @@ the simulation desyncs — worst case mid-game, for every player in the match.
 
 We assumed this port would break sync, and set out to prove that it did.
 This document describes exactly what was tested, how you can reproduce it,
-and what remains unproven. Numbers below are from the certification runs of
-the build this fork ships; every claim states its evidence.
+and what remains unproven. Every claim states its evidence, and every set of
+numbers states the engine version and build it was measured on: sections 1 to 4
+come from the original port at engine 2025.06.24 unless a subsection says
+otherwise, and 3a and 3b are this repository's own runs. Evidence from one
+engine version does not certify another (section 5).
 
 ## How sync is measured (for non-engine-devs)
 
@@ -65,9 +68,11 @@ community) re-simulated on this port, every frame checksum-compared:
 | All That Glitters 8v8 | 92,040 | PASSED, zero sync errors |
 | Final certification: public-release 8v8 | 66,589 | REPLAY_SYNC_OK, zero sync errors |
 
-Reproduce: `spring-headless <demo.sdfz>` with the matching game/map content
-present; watch for `Sync error` lines (none should appear) and the final
-sync-OK verdict. Any public BAR replay recorded on engine 2025.06.24 works.
+Reproduce: `scripts/replay-check.sh <demo.sdfz>` with the matching game and
+map content present. It prints `REPLAY_SYNC_OK` when the replay reaches its end
+with no `[DESYNC WARNING]` line, and refuses a demo recorded on another engine
+version. The replay must have been recorded on the engine version being tested
+(`scripts/find-fleet-replays.py <version>` lists public ones).
 
 ### 3a. Engine 2026.07.04, re-verified 2026-11-08 (this repository)
 
@@ -92,20 +97,26 @@ bit-exact with the fleet. Linux runs used upstream's own build image under
 emulation. Streflop: `scripts/run-synctest.sh` is BIT-EXACT against the x86
 SSE reference (47,852 common tests) and the NEON reference (52,080).
 
-### 3b. Engine 2026.09.02, verified 2026-11-09 (this repository)
+### 3b. Engine 2026.09.02, verified 2026-11-10 (this repository, commit `9978e12570`)
 
 After merging upstream 2026.09.02 into the macOS layer, a public fleet replay
 recorded on 2026.09.02 (BAR's Engine Test channel) was re-simulated on the
-macOS arm64 build. Found with `scripts/find-fleet-replays.py 2026.09.02`
-(the replay API cannot filter by engine).
+macOS arm64 build and on this repository's own amd64 Linux build. Found with
+`scripts/find-fleet-replays.py 2026.09.02` (the replay API cannot filter by
+engine). The demo carries 580 recorded sync checksums over 412 frames, from
+both players.
 
 | Replay | Build | Result |
 |---|---|---|
-| 1v1, Glacial Gap v1.1 (13.6 min, game `test-31836-b250a16`, recorded 2026-11-08) | this repository, macOS arm64 | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (78 s at 20x) |
+| 1v1, Glacial Gap v1.1 (13.6 min, game `test-31836-b250a16`, recorded 2026-11-08) | this repository, macOS arm64 | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (77 s at 20x) |
+| same | **this repository, amd64 Linux** (gcc 13.1, upstream's build image, emulated) | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (104 s at 20x) |
 
 Same gates as 3a: libm parity 9/9, streflop BIT-EXACT against the x86 SSE
-(47,852) and NEON (52,080) references. Linux and Windows builds of this tree
-were not re-run for the switch; that is a release-time check.
+(47,852) and NEON (52,080) references. The Linux and Windows builds pass
+(`scripts/check-nonmac.sh`), and the Linux unit tests give the same 29 of 30
+as macOS. Not done on this engine version: a full-length team game, a PvE
+game (Raptors, Scavengers), a run of the Windows binary, and any live
+multiplayer game. Section 4 below was measured on 2025.06.24.
 
 ## 4. Live cross-platform multiplayer (the real thing)
 
@@ -158,29 +169,50 @@ against an official Windows client.
   end of the longest (92k-frame) demo; the same class of Lua memory pressure
   is visible on official binaries in long headless runs. Live games are
   unaffected (our longest live soak game ran 100,657 frames).
-- **Desync triage is built in.** `SPRING_DUMP_STATE_RANGE=min:max` dumps
-  full synced state (RNG, units, features, projectiles, raw floats) per
+- **Desync triage is built in.** During demo playback,
+  `SPRING_DUMP_STATE_RANGE=min:max` dumps full synced state (RNG, units, features, projectiles, raw floats) per
   frame in the range, so any reported desync can be bisected to the exact
   frame and subsystem against a reference dump.
 
 ## Appendix A — register of synced-code changes
 
-Golden rule 2 of this port is that nothing under `rts/Sim/` (or any synced
-path) changes behavior. The exceptions below are the complete list of
-port-authored commits that touch synced code. Every one of them removes
-**undefined behavior or a platform divergence** — i.e. they change behavior
-only where C++ never defined it or where clang-arm64 already diverged from
-the fleet's gcc-x86 — and every one is covered by the replay certifications
-in §3 and flagged as an upstream candidate.
+This is every change the macOS layer makes to code that can reach synced
+state, relative to the upstream release tag it is based on. It is read off the
+diff, not kept by memory. Regenerate it at every engine bump, and whenever one
+of these paths changes:
 
-| Change | Files | Why it is sync-safe |
+    git diff --stat <upstream tag> HEAD -- rts/Sim rts/lib/streflop \
+        'rts/Lua/LuaSynced*.cpp' rts/System/Sync rts/System/FastMath.h \
+        rts/Net/GameServer.cpp rts/Game/WaitCommandsAI.cpp
+
+Measured against `2026.09.02` at commit `9978e12570`. `rts/lib/streflop` is
+unchanged: it is the same submodule commit as the tag.
+
+| Change | Files | Applies to | Why the fleet's x86 results are unchanged |
+|---|---|---|---|
+| COB `SHIELD_POWER` has a defined result outside `int` range | `rts/Sim/Units/Scripts/UnitScript.cpp` | every platform | In range it is the same conversion. Out of range, or for NaN, x86 already produces `INT_MIN` (`cvttss2si`); the change returns that value explicitly. On arm64 it replaces a saturated `INT_MAX`, which was a real divergence from the fleet (upstream issue #3421). |
+| Heading casts go through `int` | `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | every platform | Below 2^31 it is the same instruction and the same truncation on x86, and arm64 now gives the same value. Known limit: from 2^31 upward x86 gives 0 and arm64 gives -1. Game Lua would have to pass such a heading on purpose. |
+| Destructors skip clean-up on an object that was never initialised | `rts/Sim/Features/Feature.cpp`, `rts/Sim/MoveTypes/GroundMoveType.cpp`, `rts/Sim/MoveTypes/ScriptMoveType.cpp`, `rts/Sim/Projectiles/WeaponProjectiles/WeaponProjectile.cpp` and `.h`, `rts/Sim/Units/CommandAI/BuilderCAI.cpp`, `rts/Sim/Units/CommandAI/MobileCAI.cpp`, `rts/Sim/Units/UnitTypes/ExtractorBuilding.cpp`, `rts/Sim/Weapons/PlasmaRepulser.cpp`, `rts/Sim/Weapons/Weapon.cpp`, `rts/Game/WaitCommandsAI.cpp` | every platform | The guarded pointers are set on every object a running game constructs. They are null only on the default instances the save-game loader creates, so the new branches run only while a failed load is being unwound. Downstream only: upstream declined this change (#3280). |
+| QTPFS shuts down only the systems that were created | `rts/Sim/Path/QTPFS/PathManager.cpp` | every platform | Destructor only, and both systems exist before the first frame of any game (upstream PR #3694, open). |
+| FPU control check on NEON | `rts/System/Sync/FPUCheck.cpp` | arm64 only | Not compiled on x86. On arm64 it re-applies streflop's own settings when the rounding mode or the flush-to-zero bit has drifted (upstream PR #3689, open). |
+| `SPRING_DEMO_SPEED` | `rts/Net/GameServer.cpp` | every platform, demo playback only | Changes playback pacing, not simulated state. Sync is checked the same way at any speed. |
+| `math::sqrtf` declaration | `rts/System/FastMath.h` | translation units built without streflop | No synced translation unit sees it: the condition mirrors the one in `streflop_cond.h`. |
+
+Build-level controls. These are not source changes, but the port's sync
+rests on them:
+
+| Control | Where | What checks it |
 |---|---|---|
-| glibc dbl-64 libm import (fleet parity for `double` math) | `rts/lib/streflop/libm/dbl-64/` | Compiles the exact glibc implementations the fleet's gcc builds call, instead of Apple libm. Proven by the cross-arch streflop test (§1: 52,080/52,080 bit-exact) and the dfp libm-hash gate in every build. |
-| `math::floor` x86 `cvttss2si` semantics emulation | `rts/lib/streflop/streflop_cond.h` | Out-of-range float→int conversion is UB; x86 hardware saturates to 0x80000000 and game Lua/COB relies on it (raptors desync). arm64 now computes the same value the fleet computes. |
-| COB callin float→short truncation | `rts/Sim/Units/Scripts/CobInstance.cpp`, `CobThread.cpp` | float→short out-of-range conversion is UB; clang-arm64 and gcc-x86 disagreed. Replaced with defined int32 truncation matching the fleet's observed behavior. |
-| float→short/heading UB sweep | `rts/Sim/Path/IPathController.cpp`, `rts/Sim/MoveTypes/{Ground,HoverAir}MoveType.cpp`, `rts/Lua/LuaSynced{MoveCtrl,Read}.cpp` | Same UB class as above, found by audit rather than by desync. Same defined-truncation replacement. |
-| streflop submodule bump (fleet-parity `math::floor`) | `rts/lib/streflop` | Carries the upstream fix for the same divergence class. |
+| The dbl-64 libm objects are compiled with gcc 15, as the fleet's are, and swapped into the streflop archive | `scripts/gcc-dbl64-swap.sh` | the libm parity gate in `scripts/build-engine.sh` (9 hashes over 12 functions, against `testkit/libm-refs/`) |
+| `-ffp-contract=off` and no fast-math in synced code | upstream's CMake | the streflop sync test and the replays |
+| The macOS build reports the release version | `rts/build/cmake/ConfigureVersion.cmake` | `scripts/replay-check.sh` refuses a version mismatch |
 
-Everything else the port changes is unsynced (rendering, present, input,
-audio, packaging) or build-system-level with sync gates re-run after every
-change. Pure refactors of the macOS present path never touch `rts/Sim/`.
+Now upstream, and no longer part of the layer (earlier versions of this
+register listed them): the COB float-to-short casts (#3075), the
+`GroundMoveType` heading cast (#3342) and `views::enumerate` compatibility
+(#3289). The original port's glibc dbl-64 import and its `math::floor`
+emulation belonged to the 2025.06.24 lane and are not in this tree: here
+`math::floor(float)` is streflop's software floor on every architecture.
+
+Sections 3a and 3b are the evidence for this table. A row changed after the
+date of a replay is not covered by that replay.
