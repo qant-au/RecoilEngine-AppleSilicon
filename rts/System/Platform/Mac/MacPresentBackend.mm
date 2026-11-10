@@ -1027,6 +1027,17 @@ size_t dpAllocBytes = 0;
 int    dpW = 0, dpH = 0;
 long   dpFrame = 0;
 bool   dpFailed = false;
+int    dpFailedW = 0, dpFailedH = 0; // render size the failure happened at
+
+// Switch direct present off. A failure belongs to the size it happened at: the
+// ring is rebuilt on a resize, so DirectPresentFrame tries again at a new size
+// and a one-off failure does not cost the whole session.
+void FailDirectPresent(int w, int h)
+{
+	dpFailed = true;
+	dpFailedW = w;
+	dpFailedH = h;
+}
 
 void ReleaseDirectRing()
 {
@@ -1108,13 +1119,17 @@ bool EnsureDirectRing(int w, int h)
 
 // Pack this frame into the ring and hand the lag-frames-old slot to the Metal
 // present. Returns false (and latches dpFailed) if the path is unavailable —
-// the caller then runs the IOSurface fallback from this frame on.
+// the caller then runs the IOSurface fallback from this frame on, until the
+// render size changes.
 bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 {
-	if (dpFailed)
-		return false;
+	if (dpFailed) {
+		if (rdW == dpFailedW && rdH == dpFailedH)
+			return false;
+		dpFailed = false;
+	}
 	if (!EnsureDirectRing(rdW, rdH)) {
-		dpFailed = true;
+		FailDirectPresent(rdW, rdH);
 		return false;
 	}
 
@@ -1141,7 +1156,7 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 		if (pe != GL_NO_ERROR) {
 			LOG_L(L_WARNING, "[MacPresent] pack into persistent PBO failed (err 0x%04x) — disabling direct present", pe);
 			glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-			dpFailed = true;
+			FailDirectPresent(rdW, rdH);
 			return false;
 		}
 	}
@@ -1199,7 +1214,7 @@ bool DirectPresentFrame(int rdW, int rdH, GLenum readFormat, int lagFrames)
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
 	if (!presented) {
-		dpFailed = true;
+		FailDirectPresent(rdW, rdH);
 		return false;
 	}
 	dpFrame++;
