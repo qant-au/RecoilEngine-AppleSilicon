@@ -68,7 +68,6 @@ CLuaIntro::CLuaIntro()
 		KillLua();
 		return;
 	}
-	LOG("[LuaIntro] loaded \"%s\" (%u bytes)", file.c_str(), (unsigned)code.size());
 
 	LuaLibs::OpenUnsynced(L);
 

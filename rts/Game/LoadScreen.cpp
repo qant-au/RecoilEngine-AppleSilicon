@@ -143,7 +143,6 @@ bool CLoadScreen::Init()
 	// the global font), the latter will cause problems in GL4
 	{
 		auto lock = CLoadLock::GetUniqueLock();
-		LOG("[LoadScreen::%s] LuaIntro block reached", __func__);
 #if defined(__APPLE__)
 		// The original macOS layer skipped CLuaIntro against an early EGL/Metal
 		// present incompatibility. The present path has since been rewritten

@@ -786,27 +786,6 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 		if (clearErrors || glDebugErrors)
 			glClearErrors("GR", __func__, glDebugErrors);
 
-		// A lost device leaves every later gl call a no-op, so the game keeps running
-		// blind: the window freezes, the watchdog fires half a minute later and the
-		// process dies with a hang report instead of a reason. Ask the driver instead
-		// and quit straight away. From Vandomas/RecoilEngine-AppleSilicon c2a67950b1.
-#ifndef HEADLESS
-		if (GLAD_GL_KHR_robustness != 0) {
-			static uint32_t resetChecks = 0;
-			if ((++resetChecks % 30u) == 0u) {
-				const GLenum resetStatus = glGetGraphicsResetStatus();
-				if (resetStatus != GL_NO_ERROR) {
-					static bool reported = false;
-					if (!reported) {
-						reported = true;
-						LOG_L(L_ERROR, "[GR::%s] the graphics device was lost (reset status 0x%04x), quitting", __func__, resetStatus);
-						gu->globalQuit = true;
-					}
-				}
-			}
-		}
-#endif
-
 #if defined(__APPLE__) && !defined(HEADLESS) && defined(SPRING_MAC_DIAGNOSTICS)
 		// SPRING_FRAME_CAPTURE: headless verification capture of the default
 		// FBO; runs even when the actual present is suppressed below
@@ -860,7 +839,7 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 	// storm cannot flood the log: the generic repeat-coalescer in the log
 	// backend collapses these structurally-identical lines into periodic
 	// "repeated N more time(s)" rollups (no ad-hoc throttle needed here).
-	// Disable with SPRING_NO_STALL_LOG=1.
+	// macOS builds only; disable with SPRING_NO_STALL_LOG=1.
 	//
 	// Hitch attribution: SPRING_HITCH_LOG=<ms> (support/debug escape hatch, off
 	// by default) turns the profiler on and, for every frame longer than <ms>
@@ -871,7 +850,11 @@ void CGlobalRendering::SwapBuffers(bool allowSwapBuffers, bool clearErrors)
 	// the stall line alone cannot say whether sim, Lua, draw or present ate the
 	// time. Nested timers both appear (parent includes child).
 	{
+#if defined(__APPLE__)
 		static const bool s_stallLog = (getenv("SPRING_NO_STALL_LOG") == nullptr);
+#else
+		static constexpr bool s_stallLog = false;
+#endif
 		static const float s_hitchMs = [] {
 			const char* v = getenv("SPRING_HITCH_LOG");
 			if (v == nullptr)
@@ -1018,7 +1001,9 @@ void CGlobalRendering::CheckGLExtensions()
 
 	// All checked ARB extensions are part of the core specification since OpenGL 3.0,
 	// and a core profile context does not advertise them by name.
-	if (globalRenderingInfo.glVersionNum >= 30)
+	// (glad's flag, not globalRenderingInfo.glVersionNum: that field is filled
+	// in by SetGLSupportFlags, which runs after this check)
+	if (GLAD_GL_VERSION_3_0)
 		return;
 
 	char extMsg[ 128] = {0};
@@ -1661,6 +1646,15 @@ void CGlobalRendering::ApplyWindowTitle()
 	if (configHandler->GetBool("ShowRenderSizeInTitle") && winSizeX > 0 && winSizeY > 0)
 		title += " | render " + IntToString(winSizeX) + "x" + IntToString(winSizeY);
 
+	{
+		static std::string lastTitle;
+		static spring::mutex lastTitleMutex;
+		std::lock_guard<spring::mutex> lock(lastTitleMutex);
+		if (title == lastTitle)
+			return;
+		lastTitle = title;
+	}
+
 	// SDL_SetWindowTitle deadlocks in case it's called from non-main thread (during the MT loading).
 
 	static auto SetWindowTitleImpl = [](SDL_Window* sdlWindow, const std::string& title) {
@@ -1698,14 +1692,6 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 	fullScreen = configHandler->GetBool("Fullscreen");
 
 #if defined(__APPLE__) && !defined(HEADLESS)
-	// Safety: if some prior run left the display in a captured/lowered video mode,
-	// restore the desktop mode before computing geometry. This build never
-	// captures the display (see the policy below), so normally a no-op.
-	if (!fullScreen) {
-		const int2 desktopRes_ = GetMaxWinRes();
-		MacPresent::RestoreDesktopDisplayMode(window, desktopRes_.x, desktopRes_.y);
-	}
-
 	// ── macOS window-mode policy ───────────────────────────────────
 	//  * Windowed (Fullscreen=0, WindowBorderless=0): a bordered, movable window,
 	//    sized to FIT ON the screen (clamped below — a saved size larger than the
@@ -1824,9 +1810,8 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 
 	// No manual NSWindow reframing: SDL_WINDOW_FULLSCREEN_DESKTOP already covers
 	// the display (menu bar + Dock auto-hidden, cursor pinned at every edge) and
-	// keeps the engine's window-geometry callbacks consistent. The previous
-	// manual setFrame is what fought SDL and produced the oversized/jumping
-	// window; EnforceBorderlessFullscreenFrame is left dormant (never activated).
+	// keeps the engine's window-geometry callbacks consistent. A manual
+	// setFrame fights SDL and produces an oversized, jumping window.
 #else
 	if (newRes == maxRes)
 		SDL_MaximizeWindow(window);
@@ -2636,7 +2621,9 @@ static void APIENTRY glDebugMessageCallbackFunc(
 
 	const auto* glDebugOptions = reinterpret_cast<const GLDebugOptions*>(userParam);
 
-	if ((glDebugOptions == nullptr) || !glDebugOptions->dbgGroups && (msgType == GL_DEBUG_TYPE_PUSH_GROUP || msgType == GL_DEBUG_TYPE_POP_GROUP))
+	// (a marker is what a debug group also sends to the driver as a label, see
+	// GL::DebugGroupImpl: it belongs with the group messages)
+	if ((glDebugOptions == nullptr) || !glDebugOptions->dbgGroups && (msgType == GL_DEBUG_TYPE_PUSH_GROUP || msgType == GL_DEBUG_TYPE_POP_GROUP || msgType == GL_DEBUG_TYPE_MARKER))
 		return;
 
 	const char* msgSrceStr = glDebugMessageSourceName(msgSrce);

@@ -1154,7 +1154,19 @@ inline bool LuaOpenGL::CheckDrawingAllowed(lua_State* L, const char* caller)
 	CheckDrawingEnabled(L, caller);
 
 	// GL rejects everything except vertex data between glBegin and glEnd, so do the same
-	return !luaBatch.Active();
+	if (!luaBatch.Active())
+		return true;
+
+	// A buffered block is drawn in one call when it ends, so a state call made
+	// inside it cannot take effect between two of its vertices. That includes
+	// the few calls plain GL accepts there (gl.Material, gl.CallList). Say so
+	// once, naming the first one seen, instead of dropping them silently.
+	static bool droppedCallLogged = false;
+	if (!droppedCallLogged) {
+		droppedCallLogged = true;
+		LOG_L(L_WARNING, "[LuaOpenGL] gl.%s() was called inside a gl.BeginEnd block and ignored: with LuaImmediateModeBuffering on, only vertex data is accepted there (reported once)", caller);
+	}
+	return false;
 }
 
 
@@ -6940,7 +6952,27 @@ int LuaOpenGL::SaveImage(lua_State* L)
 int LuaOpenGL::GPUStamp(lua_State* L)
 {
 	CheckDrawingEnabled(L, __func__);
-	globalRendering->GPUStamp(luaL_checkstring(L, 1));
+
+	// every distinct label becomes a profiler timer that is never removed, so
+	// a script building labels from data must not be able to grow that table
+	// without limit: past the cap, further new labels share one zone
+	static constexpr size_t MAX_LUA_GPU_LABELS = 64;
+	static constexpr size_t MAX_LUA_GPU_LABEL_LEN = 48;
+	static std::vector<std::string> knownLabels;
+
+	std::string label = luaL_checkstring(L, 1);
+	if (label.size() > MAX_LUA_GPU_LABEL_LEN)
+		label.resize(MAX_LUA_GPU_LABEL_LEN);
+
+	if (std::find(knownLabels.begin(), knownLabels.end(), label) == knownLabels.end()) {
+		if (knownLabels.size() < MAX_LUA_GPU_LABELS) {
+			knownLabels.push_back(label);
+		} else {
+			label = "LuaOther";
+		}
+	}
+
+	globalRendering->GPUStamp(label.c_str());
 	return 0;
 }
 
