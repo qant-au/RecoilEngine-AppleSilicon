@@ -78,8 +78,8 @@ upstream. See [UPSTREAM.md](UPSTREAM.md).
   presents. The render thread never waits inside `nextDrawable`. When both
   slots are taken, the frame is dropped, not torn: the next present shows newer
   content anyway.
-- **Log.** A dropped present prints `[MetalPresent] dropped present (compositor
-  2 behind)` to standard error, rate limited.
+- **Log.** A dropped present writes `[MetalPresent] dropped present (compositor
+  2 behind)` to the engine log, rate limited.
 
 ## Deeper Upload Ring and Blocking Fence Waits
 

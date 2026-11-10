@@ -66,8 +66,8 @@ Do this when BAR's Engine Test channel moves to a new engine version `NEW`.
    conflict forces a new change under `rts/Sim/` or in streflop, stop: that is
    a determinism question, not a merge chore.
 2. **Move the submodule forks.** `tools/pr-downloader` and
-   `AI/Skirmish/BARb` are forks with one commit each on a branch named for
-   the engine version. For each: create a branch at the commit the new tag
+   `AI/Skirmish/CircuitAI` are forks with one commit each on a branch named
+   for the engine version. For each: create a branch at the commit the new tag
    pins, re-apply our commit (or drop it if upstream has it), push the
    branch, and update `.gitmodules` and the submodule pointer. See
    [Submodule Forks](#submodule-forks).
@@ -83,7 +83,9 @@ Do this when BAR's Engine Test channel moves to a new engine version `NEW`.
 5. **Get a fleet demo recorded on `NEW`** and run the replay check on it.
    A demo from the old version cannot be used: the check refuses it.
    `scripts/find-fleet-replays.py NEW` lists public ones. Prefer a 1v1, a
-   full team game and a Raptors or Scavengers game.
+   full team game and a Raptors or Scavengers game. Run the same demos
+   through `scripts/sanitize-replay.sh` and treat every conversion it reports
+   in synced code as a finding.
 6. **Make new visual-regression baselines.** The pictures are stored per
    engine version and demo (`testkit/visreg/<engine>/<demo>/`). Run
    `scripts/visreg.sh --demo <new demo>`, look at every picture, and only
@@ -108,8 +110,8 @@ The Engine Notice).
 | Submodule | Fork And Branch | Our Change |
 |---|---|---|
 | `tools/pr-downloader` | `qant-au/pr-downloader`, branch `macos-<engine>` | one commit on upstream's pin: HTTP/1.1 for BAR's content network on macOS |
-| `AI/Skirmish/BARb` | `qant-au/CircuitAI`, branch `macos-arm64-<engine>` | one commit on upstream's pin: the AngelScript arm64 assembly file in CMake |
-| `AI/Skirmish/CircuitAI` | none: upstream's commit | `patches/circuitai/*.patch`, applied to the working tree by `scripts/build-engine.sh`; `.gitmodules` sets `ignore = dirty` for it |
+| `AI/Skirmish/BARb` | none: upstream's commit and address, as in the engine tag | none |
+| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI`, branch `macos-arm64-zk-<engine>` | one commit on upstream's pin: the AngelScript arm64 assembly file in CMake and its labels for the Apple assembler |
 
 The forks must stay public at the commits a release was built from: they are
 part of the corresponding source. The exact commits are in
@@ -163,7 +165,9 @@ The driver build takes its other inputs from pins as well: the Vulkan loader,
 SPIRV-Tools and zstd (`scripts/build-driver-deps.sh`), the translator tag and
 commit in the script itself, libclc (`scripts/build-libclc.sh`) and the Python
 packages for Mesa's code generators (`scripts/mesa-venv-requirements.txt`).
-LLVM 19 comes from Homebrew and is linked statically into the driver.
+LLVM 19 comes from Homebrew and is a build tool only: the build stops if any
+LLVM code ends up in a driver library, and if a driver library depends on
+anything under a package manager's prefix.
 
 ## The Linux And Windows Check
 
@@ -196,6 +200,9 @@ Linux client and a Windows client and look at each:
 | Capture devices ignored in audio hot-plug events | `rts/System/SpringApp.cpp` | plugging a microphone in does not reset sound |
 | Load-side serialisation validation | `rts/System/creg/Serializer.cpp` | save a game and load it |
 | UDP sends never block; one retry on a full send buffer | `rts/System/Net/UDPConnection.cpp` | a multiplayer game on a slow link: no packet-loss warnings in the log |
+| `EdgeMoveWidth = 0` turns edge scrolling off (upstream clamps to one pixel) | `rts/Game/Camera.cpp` | with the setting at 0, the pointer at a screen edge does not scroll |
+| The legacy ARB extension check is skipped on GL 3.0 and newer | `rts/Rendering/GlobalRendering.cpp` | the engine starts on a GL 3 or newer driver as before |
+| `gl.GPUStamp` accepts 64 distinct labels; a call dropped in a buffered `gl.BeginEnd` block is logged once | `rts/Lua/LuaOpenGL.cpp` | no new warning in the log of a normal game |
 
 ## Working On The Layer
 

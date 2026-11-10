@@ -115,14 +115,23 @@ Its game version and map must be in the app's data folder.
 
 ## What The Update Feed Promises
 
-`appcast.json` names a version, an archive address, its SHA-256 and a
-signature. An installed app replaces itself only when the archive verifies
-against the built-in public key, the unpacked bundle has this app's bundle
-identifier and exactly the promised version, and `codesign --verify --deep
---strict` passes (and, for a Developer ID signed app, the new one is signed
-by the same team). The feed signature does not expire, which is why only a
-signed, notarised build writes one: a feed for an ad-hoc build would offer
-that build to every older copy.
+`appcast.json` names a version, an archive address, the archive's length and
+SHA-256, a date, a minimum macOS version and notes, with one signature over
+all of them. An installed app checks that signature against its built-in
+public key before it asks the player anything, so a feed that was edited, or
+an older feed format, is ignored. It then downloads only from an `https`
+address under the release download base the build recorded, stops at the
+promised length, and replaces itself only when the archive matches the
+SHA-256, the unpacked bundle has this app's bundle identifier and exactly the
+promised version, and `codesign --verify --deep --strict` passes. An app
+signed by a Developer ID team accepts only a new one signed by the same team.
+
+The feed signature does not expire, which is why only a signed, notarised
+build writes one: a feed for an ad-hoc build would offer that build to every
+older copy. Nothing compares the feed's date with a clock, so an old feed
+that is still validly signed can be served again; it can only offer the
+version it was signed for, and the app never installs a version that is not
+newer than itself.
 
 ## The Engine Notice
 

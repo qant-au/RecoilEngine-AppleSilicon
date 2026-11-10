@@ -91,10 +91,6 @@ on that newer engine.
   turns the library's `1.0e+300` into a float infinity. Nothing in the engine
   calls either on doubles. The parity gate hashes every NaN as one value for
   this reason.
-- **Heading conversions above 2^31.** Seven float-to-short heading
-  conversions go through `int`. Below 2^31 arm64 and x86 agree. From 2^31
-  upward x86 gives 0 and arm64 gives -1. Game Lua would have to pass such a
-  heading on purpose.
 - **Two compilers.** streflop makes floating-point results independent of
   the compiler where streflop is used. Everything else that is synced relies
   on IEEE 754 and identical operation order. For a desync with no obvious

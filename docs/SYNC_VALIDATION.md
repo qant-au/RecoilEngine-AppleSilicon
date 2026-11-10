@@ -139,10 +139,14 @@ both players.
 | 1v1, Glacial Gap v1.1 (13.6 min, game `test-31836-b250a16`, recorded 2026-11-08) | this repository, macOS arm64 | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (77 s at 20x) |
 | same | **this repository, amd64 Linux** (gcc 13.1, upstream's build image, emulated) | REPLAY_SYNC_OK, game end frame 24,503, 0 desyncs (104 s at 20x) |
 
-Run again on 2026-11-10 at commit `fc948a4f05`, after the changes listed in
-Appendix A and the cleanup of the layer: the same two rows, the same result
-(game end frame 24,503, 0 desyncs, 580 checksums compared), with the libm
-parity gate now at 21 of 21 lines.
+Run again on 2026-11-10 at commit `93e9333d83`, after the changes listed in
+Appendix A (the heading helper among them) and the cleanup of the layer: the
+same two rows, the same result (game end frame 24,503, 0 desyncs, 580
+checksums compared), with the libm parity gate now at 21 of 21 lines. The
+sanitizer replay of the same demo (`scripts/sanitize-replay.sh`) stays in
+sync and reports two out-of-range conversions, both in upstream's Lua table
+code and both shown to give the same result on x86 and arm64
+(`testkit/sanitize/known-sites.txt`); none in the simulation.
 
 At the first run, the same gates as 3a: libm parity 9/9, streflop BIT-EXACT against the x86 SSE
 (47,852) and NEON (52,080) references. The Linux and Windows builds pass
@@ -221,15 +225,15 @@ of these paths changes:
 
     git diff --stat <upstream tag> HEAD -- rts/Sim rts/lib/streflop \
         'rts/Lua/LuaSynced*.cpp' rts/System/Sync rts/System/FastMath.h \
-        rts/Net/GameServer.cpp
+        rts/Net/GameServer.cpp rts/System/SpringMath.h rts/System/SpringMath.inl
 
-Measured against `2026.09.02` at commit `5ae54cd976`. `rts/lib/streflop` is
+Measured against `2026.09.02` at commit `f43cda0bd8`. `rts/lib/streflop` is
 unchanged: it is the same submodule commit as the tag.
 
 | Change | Files | Applies to | Why the fleet's x86 results are unchanged |
 |---|---|---|---|
 | COB `SHIELD_POWER` has a defined result outside `int` range | `rts/Sim/Units/Scripts/UnitScript.cpp` | every platform | In range it is the same conversion. Out of range, or for NaN, x86 already produces `INT_MIN` (`cvttss2si`); the change returns that value explicitly. On arm64 it replaces a saturated `INT_MAX`, which was a real divergence from the fleet (upstream issue #3421). |
-| Heading casts go through `int` | `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | every platform | Below 2^31 it is the same instruction and the same truncation on x86, and arm64 now gives the same value. Known limit: from 2^31 upward x86 gives 0 and arm64 gives -1. Game Lua would have to pass such a heading on purpose. |
+| Heading conversions go through `FloatToHeadingWrapped` | `rts/System/SpringMath.h`, `rts/System/SpringMath.inl`, `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | every platform | In range of `int` it is the same instruction and the same truncation on x86 as the plain cast. Outside it, and for NaN, the helper returns what x86 already produces (`INT_MIN`, whose low 16 bits are 0); arm64 used to give -1 there. A unit test (`testClampRad`) checks the values on macOS and in the Linux build. |
 | QTPFS shuts down only the systems that were created | `rts/Sim/Path/QTPFS/PathManager.cpp` | every platform | Destructor only, and both systems exist before the first frame of any game (upstream PR #3694, open). |
 | FPU control check on NEON | `rts/System/Sync/FPUCheck.cpp` | arm64 only | Not compiled on x86. On arm64 it re-applies streflop's own settings when the rounding mode or the flush-to-zero bit has drifted (upstream PR #3689, open). |
 | `SPRING_DEMO_SPEED` | `rts/Net/GameServer.cpp` | every platform, demo playback only | Changes playback pacing, not simulated state. Sync is checked the same way at any speed. |

@@ -44,7 +44,7 @@ code. None has been opened yet.
 | TextureAtlas: null-check `GetTexID` and log why `Finalize` failed | `rts/Rendering/Textures/TextureAtlas.h`, `TextureAtlas.cpp` | none | not opened |
 | Do not terminate on joinable ext threads at exit | branch `pr/extthreads-joinable-exit` | none | branch prepared; needs an issue, an upstream-style title, and credit to its original author. Upstream may ask for the cause (an `exit()` off the main thread) to be fixed |
 | Resume music after a buffer underrun | `rts/System/Sound/OpenAL/MusicStream.cpp` | none | not opened |
-| Sim: avoid undefined behaviour in the remaining float-to-short heading casts | `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | precedent: merged #3342 | not opened. Synced. Make the seven sites agree with x86 above 2^31 first (see [DETERMINISM.md](DETERMINISM.md), Known Limits) |
+| Sim: avoid undefined behaviour in the remaining float-to-short heading casts | `rts/System/SpringMath.inl` (`FloatToHeadingWrapped`), `rts/Sim/MoveTypes/HoverAirMoveType.cpp`, `rts/Sim/Path/IPathController.cpp`, `rts/Lua/LuaSyncedMoveCtrl.cpp`, `rts/Lua/LuaSyncedRead.cpp` | precedent: merged #3342 | not opened. Synced. The seven sites give what x86 computes on every platform, also outside `int` range, with a unit test |
 | COB: give `SHIELD_POWER` a defined result outside `int` range | `rts/Sim/Units/Scripts/UnitScript.cpp` | issue #3421 (open) | ask on the issue before sending code: a maintainer leans toward removing `SHIELD_POWER` |
 | Restore shader uniforms before validating a re-linked program | `rts/Rendering/Shaders/Shader.cpp` | none | not opened. Changes every driver, so it needs a Linux and a Windows run |
 | Add a `WindowTitle` setting | `rts/System/SpringApp.cpp` | none | not opened. Needs a changelog snippet |
@@ -55,13 +55,25 @@ Found while working on the layer, to report rather than to patch:
 - streflop's double `expm1` and `cosh` return NaN near zero on every platform
   ([DETERMINISM.md](DETERMINISM.md), Known Limits).
 - #3022 tests the GL version before it has been read, so its early return
-  never fires.
+  never fires. Fixed in this tree (it asks glad).
+- #3272 and #3533 read GL state on every call (`gl.Rect` reads the polygon
+  mode, each buffered block reads the bound vertex array and buffer). On a
+  driver that runs GL on a worker thread such a read forces a
+  synchronisation. Left as their authors wrote it.
 - #3293 retries a send on `try_again`, which Windows never returns for a full
   send buffer (`would_block` there). Fixed in this tree.
 - #3533 reads GL state while a display list is being compiled. In this tree
   the plain calls are recorded inside `gl.CreateList`.
 - #3566: the decompression buffer was sized from unchecked header
   dimensions. Bounded in this tree.
+
+- CircuitAI's `zk` branch bundles an AngelScript that has no native calling
+  convention for Apple arm64, so the AI library builds but aborts when it
+  registers its first function. BARb's newer AngelScript is fine. This is for
+  the CircuitAI project, not for Recoil.
+- On SIGTERM the engine's forced exit runs `exit()` off the main thread, and
+  an AI library's static destructors then abort on threads that are still
+  joinable. This is the cause behind the `pr/extthreads-joinable-exit` branch.
 
 None of these has been posted upstream yet.
 
@@ -144,8 +156,8 @@ contribution.
 | Submodule | Fork | What It Carries | Upstream |
 |---|---|---|---|
 | `tools/pr-downloader` | `qant-au/pr-downloader` | one commit: HTTP/1.1 for BAR's content network on macOS | not offered yet |
-| `AI/Skirmish/BARb` | `qant-au/CircuitAI` | one commit: the AngelScript arm64 assembly file for Apple in CMake. Upstream CircuitAI already has it (its #140), so the fork commit is redundant and the submodule can go back to upstream's commit once that is build-tested | merged upstream |
-| `AI/Skirmish/CircuitAI` | none (upstream `rlcevg/CircuitAI`) | `patches/circuitai/0001` is applied to the working tree at build time | not offered yet |
+| `AI/Skirmish/BARb` | none: upstream's commit | nothing. The fork's one commit was redundant (upstream CircuitAI #140) and was dropped on 2026-11-10 | not applicable |
+| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI` | one commit on upstream's `zk` pin: the AngelScript arm64 assembly file in CMake and its labels for the Apple assembler | not offered yet |
 
 ## Mesa Patches
 
@@ -156,7 +168,7 @@ The ten files in `patches/mesa/`, against the pin in
 |---|---|---|
 | 0001 | poly: barrier after reading the shared scratch pointer | yes |
 | 0002 | kosmickrisp: clear uploader bump state on release | yes |
-| 0003 | kosmickrisp: zero-initialise device memory allocations | only reworked (behind a driver option) |
+| 0003 | kosmickrisp: optionally zero-initialise device memory (`MESA_KK_ZERO_MEMORY`) | reworked on 2026-11-10 to be off by default; could be offered as an opt-in |
 | 0004 | kosmickrisp: log the loaded library path and version | no: for this bundle's own check |
 | 0005 | kosmickrisp: `fillModeNonSolid` through Metal triangle fill mode | only reworked: it maps point fill to lines and would fail conformance |
 | 0006 | zink: try `@rpath/libvulkan.1.dylib` first | no: specific to an app bundle |

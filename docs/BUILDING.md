@@ -50,6 +50,11 @@ relinks the engine without the libm step described in
 | `make release` | As `make certify`, signed with a Developer ID and notarised. Needs `IDENTITY` and notary credentials: see [RELEASING.md](RELEASING.md). | Every test above. None can be skipped for a Developer ID build. |
 | `make test` | Nothing. | The packaging tests under `packaging/test/`. |
 
+Every engine build is marked: its full version string reads
+`<engine tag> (macOS port <port version>)`, in `--version`, in the log and to
+Lua as `Engine.versionFull`. The sync version, which demos, saves and the
+network compare, is the bare engine tag.
+
 `packaging/release-build.sh` is what the app targets call; its header lists
 every option. Online play is off unless `ONLINE=1` is on the `make` command
 line (see the README).
@@ -71,6 +76,8 @@ non-zero on failure.
 | Replay check | `scripts/replay-check.sh <demo.sdfz>` | `REPLAY_SYNC_OK ... desyncs=0 checksums=N` | game content, a demo |
 | Visual regression | `scripts/visreg.sh` | `VISREG_OK` | a GPU, a built app, game content, the demo |
 | Driver smoke test | `scripts/gpu-smoke.sh` | `GPU_SMOKE_OK` | a GPU |
+| Skirmish AI check | `scripts/ai-skirmish.sh` | `AI_SKIRMISH_OK` | game content |
+| Sanitizer replay | `scripts/sanitize-replay.sh <demo.sdfz>` | `SANITIZE_REPLAY_OK` | game content, a demo; builds in `build-sanitize/` |
 | Packaging tests | `make test` | each script ends `RESULT: N passed, 0 failed` | `dialog-center-test.sh` shows real windows |
 | Linux and Windows check | `scripts/check-nonmac.sh` | `NONMAC_OK` | Docker, bash 4+ |
 
@@ -127,6 +134,36 @@ sound.
 
 `scripts/visreg.sh --bless` copies a run's pictures over the baselines. Do
 that only after a person has looked at the new pictures.
+
+The comparison (`scripts/visreg/compare.py`) needs the Pillow package
+(`python3 -m pip install -r scripts/visreg/requirements.txt`); the script
+checks for it before the replay starts. Besides the two whole-picture limits,
+a picture fails when more than 60 percent of the pixels in any 64-pixel
+window differ clearly, so a small region that is completely wrong fails even
+when the picture as a whole is within its limits. The demo's SHA-256 is kept
+beside the baselines (`demo.sha256`, written by `--bless`) and a run stops if
+the demo is not that file. `python3 scripts/visreg/selftest.py` checks the
+comparison rules themselves against the committed baselines, without a game
+window.
+
+### Skirmish AI Check
+
+`scripts/ai-skirmish.sh` starts a headless game between two copies of a
+native skirmish AI (BARb by default) and lets it run for a minute. The AI
+libraries are built from submodules with their own build files, so a passing
+engine build says nothing about whether they load and play. The script stops
+the engine with its time limit and judges only what was logged before that.
+
+### Sanitizer Replay
+
+`scripts/sanitize-replay.sh <demo.sdfz>` builds `spring-headless` with
+clang's float-cast-overflow check in `build-sanitize/` and re-simulates the
+demo with it. A float-to-integer conversion whose value does not fit the
+target type is undefined in C++, and x86 and arm64 give different results for
+it, so each one reported in code that can reach synced state is a possible
+desync. The script lists every reporting site and fails when one is in synced
+code and is not already explained in `testkit/sanitize/known-sites.txt`
+(today: two sites in upstream's Lua table code). Run it at each engine merge.
 
 ### Driver Smoke Test
 
@@ -189,11 +226,13 @@ Support switches. All are unset by default, and all are in release builds.
 | `SPRING_MAC_NO_LUAINTRO=1` | Skip the Lua loading screen. |
 | `SPRING_ALLOW_SOFTWARE_GL=1` | Allow a software renderer instead of failing at start. |
 | `SPRING_EGL_FULL_TEARDOWN=1` | Tear EGL down fully at exit instead of the fast exit. |
-| `SPRING_NO_STALL_LOG=1` | Silence the log lines for draw gaps over 150 ms. |
+| `SPRING_NO_STALL_LOG=1` | Silence the log lines for draw gaps over 150 ms (macOS builds only; other platforms do not log them). |
+| `SPRING_MAC_SRGB_LAYER=1` | Tag the window's Metal layer as sRGB, so the system colour-matches the picture to the display. Off by default until compared by eye on a wide-gamut panel. |
 | `SPRING_MAC_STREAM_BUFFERING=n` | Stream-buffer ring depth, 2 to 8 (default 3). |
 | `SPRING_MAC_UPLOAD_BUFFERING=n` | Ring depth for the model-data upload buffers (minimum 3). |
 | `SPRING_LUAVAO_FORCE_RESTART=1` | Keep primitive restart enabled on list topologies, as upstream does. |
 | `SPRING_HITCH_LOG=ms` | Log each frame slower than this many milliseconds (50 if the value is 1 or less), with a per-timer breakdown. |
+| `MESA_KK_ZERO_MEMORY=0` | Stop the driver clearing each new memory allocation (the engine turns the clear on). Shows where a game samples a texture it never rendered to, and what the clear costs. |
 | `SPRING_DBG_INPUT=1` | Log every mouse, wheel and motion event with its source. macOS builds only. |
 | `SPRING_DBG_CONFIG=1` | Log every settings change made during play. macOS builds only. |
 | `SPRING_DUMP_STATE_RANGE=min:max` | Dump the full synced state per frame in the range, for desync triage. |
@@ -219,7 +258,9 @@ Diagnostics builds only (`-DSPRING_MAC_DIAGNOSTICS=ON`):
 ## Environment Variables: The App's Launcher
 
 Read by `packaging/launcher.sh` when the app starts. They exist for the test
-scripts and for support; a player never needs one.
+scripts; a player never needs one. All but the first are honoured only
+together with `BAR_WRITEDIR_OVERRIDE`: on the player's real data folder they
+are ignored, and the launcher finds its tools on the system path only.
 
 | Variable | Effect |
 |---|---|
@@ -240,6 +281,7 @@ scripts and for support; a player never needs one.
 |---|---|---|
 | `MACOSX_DEPLOYMENT_TARGET` | every build script | The macOS floor. The default is the pinned floor; every binary is checked against it. |
 | `ENGINE_SRC`, `ENGINE_BUILD` | `build-engine.sh`, `release-build.sh`, test scripts | Engine source tree and build folder (defaults: this checkout, `build-engine/`). |
+| `ENGINE_PORT_VERSION` | `build-engine.sh` | The port version in the engine's version marker (default: `packaging/PORT_VERSION`). |
 | `ENGINE_ALLOW_SRC_SWITCH=1` | `build-engine.sh` | Allow a build folder configured for another source tree to be reused. |
 | `AI_TYPES` | `build-engine.sh` | Which AI interfaces to build (default `NATIVE`). |
 | `WITH_SYNCTEST=1`, `WITH_VISREG=1` | `build-engine.sh` | Same as `--with-synctest`, `--with-visreg`. |

@@ -43,13 +43,31 @@ has not been re-checked after a change to the thing it measures is stale.
 | BAR lobby: replay list and downloads | spring-launcher (Electron) | `sl-bridge` implements the same protocol | **match** for replays and game/map/resource downloads | `packaging/test/sl-bridge-test.sh`; issue #1 |
 | BAR lobby: minimap thumbnails, log upload, Discord presence | spring-launcher | `sl-bridge`: minimaps decoded from the map archive (system bsdtar + DXT1), Discord Rich Presence over Discord's local socket with BAR's application id, log upload to BAR's log server | **match**; log upload is off while online play is off (it answers with where the logs are) | `packaging/test/sl-bridge-test.sh` |
 | Engine updates when BAR moves engines | the launcher downloads the new engine | the engine is inside the app, so a new app must be built and published. The app checks BAR's production engine at each launch and tells the player when it is newer, and its in-app updater installs a newer app from a signed feed | **equivalent by design**; not exercised end to end, because no release has been published | `packaging/test/engine-nudge-test.sh`, `packaging/test/updater-test.sh`; `docs/RELEASING.md` |
-| Engine-only distribution | `recoil_<ver>_<arch>-linux.7z`: spring, spring-dedicated, spring-headless, libunitsync, pr-downloader, AI (BARb, CircuitAI, NullAI), base content, fonts, default UI files | `make engine-dist`: spring, spring-headless, spring-dedicated, libunitsync.dylib, pr-downloader, AI (BARb, CircuitAI, NullAI), base content in the official layout, fonts, default UI files (LuaUI, luaui.lua, ctrlpanel.txt, cmdcolors.txt, example widgets), bundled libraries | **match** (CircuitAI is rlcevg/CircuitAI built with `patches/circuitai`; unitsync initialises and lists all three AIs) | `ls` the official 7z vs `make engine-dist` |
+| Engine-only distribution | `recoil_<ver>_<arch>-linux.7z`: spring, spring-dedicated, spring-headless, libunitsync, pr-downloader, AI (BARb, CircuitAI, NullAI), base content, fonts, default UI files | `make engine-dist`: spring, spring-headless, spring-dedicated, libunitsync.dylib, pr-downloader, AI (BARb, CircuitAI, NullAI), base content in the official layout, fonts, default UI files (LuaUI, luaui.lua, ctrlpanel.txt, cmdcolors.txt, example widgets), bundled libraries | **match** (unitsync initialises and lists all three AIs; BARb loads and plays, `scripts/ai-skirmish.sh`). **Gap:** CircuitAI, the Zero-K AI, builds and is listed but cannot start on Apple arm64, because its bundled AngelScript has no native calls on that platform; it is built from this repository's fork branch, one commit on upstream's pin | `ls` the official 7z vs `make engine-dist` |
 | Input (cursor, camera, multi-monitor) | reference | hardware cursor and CamMode 2 (PR #20); multi-monitor scaling reported broken | **unverified / gap** | issues #2, #3 |
 | VSync setting | SDL swap interval: off, on or adaptive | any non-zero value paces the render loop to the display (120.0 fps on a 120 Hz panel, no dropped frames); 0 runs unpaced (354 fps in the same scene, surplus frames dropped). On and adaptive behave the same: frames are never torn on this present path | **equivalent** | `rts/System/Platform/Mac/MetalPresent.mm` (`TakePresentSlot`); the log line `[EGL] VSync=N: frames paced to the display` |
 | `gl.BeginEnd` drawing from Lua | one GL call per vertex | each block drawn with one `glDrawArrays` (`LuaImmediateModeBuffering`, on by default on macOS only, off elsewhere as upstream); inside `gl.CreateList` the plain calls are recorded, as upstream | **equivalent** (same picture; setting 0 restores the upstream path) | `scripts/visreg.sh` |
 | Frame pacing / hitches | reference | `SPRING_HITCH_LOG` available; periodic hitches reported on M1 | **unverified** | issue #4 |
 | macOS floor | n/a | macOS 27.0, enforced on every bundled binary | n/a | `packaging/release-build.sh` deployment-target audit |
 | Signed, notarised releases | n/a | pipeline supports Developer ID + notarytool; no identity configured for this repository | **gap (decision)** | `make release` |
+
+## Lua-Visible Differences From The Official Engine
+
+What game Lua can observe on this build against official 2026.09.02. Each
+comes from a change listed in `docs/UPSTREAM.md`, and each needs a changelog
+entry in whichever upstream pull request carries it.
+
+| Difference | Where It Applies | From |
+|---|---|---|
+| A `gl.BeginEnd` block is drawn with one call when it ends (`LuaImmediateModeBuffering`). Inside the block only vertex data is accepted: other `gl.*` calls do nothing, including `gl.Material` and `gl.CallList`, which plain GL accepts there. The first such call is logged once. State set inside the block (`gl.LineWidth`, `gl.PointSize`) applies to the whole block, and a nested block joins the outer one. Inside `gl.CreateList` the plain calls are recorded, as upstream does. | macOS by default; elsewhere only when the setting is turned on | #3533 |
+| `gl.Rect` draws a line loop or points when the polygon mode is not fill, instead of a quad lowered to triangles. | every platform | #3272 |
+| `gl.RenderToTexture` restores the framebuffer that was bound before the call. | every platform | #3554 |
+| `gl.Shape` and LuaVBO calls raise a Lua error or draw nothing on unusable data instead of crashing; LuaVBO size limits apply to the requested size and attribute padding is honoured. | every platform | #3695, #3551, #3553 |
+| `gl.CreateShader` fails a shader with a geometry stage on a driver where the engine's probe finds geometry shaders dead. | drivers without a geometry stage (this one) | #3539 |
+| LuaVAO draws do not enable primitive restart for list topologies. | every platform | #3516 |
+| `gl.GPUStamp(label)` is a new function (see `GPUTimers`); at most 64 distinct labels. | every platform | this repository |
+| `Engine.versionFull` carries the build marker, `2026.09.02 (macOS port <version>)`. `Engine.version` is unchanged. | macOS | this repository |
+| `EdgeMoveWidth = 0` turns edge scrolling off. | every platform | #3341 |
 
 ## Re-checking everything
 
