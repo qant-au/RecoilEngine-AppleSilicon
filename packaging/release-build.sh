@@ -795,10 +795,12 @@ echo "=== [4/7] license collection + audit"
 mkdir -p "$RESOURCES/LICENSES"
 # the GPL text itself: the root COPYING is only a pointer ("see LICENSE")
 cp "$SRC/gpl-2.0.txt" "$RESOURCES/COPYING"
-cp "$PKG/NOTICE" "$RESOURCES/"
 cp "$PKG/LICENSES/MANIFEST.tsv" "$RESOURCES/LICENSES/"
+# NOTICE is written from what this bundle holds, for this profile and release
+"$PKG/make-notice.sh" "$APP" "$PROFILE" "v$PORTVER" || { echo "FATAL: could not write NOTICE"; exit 1; }
+# The texts are collected into the bundle and audited there. Nothing is copied
+# back into the repository: a build must not rewrite tracked files.
 ENGINE_SRC="$SRC" "$PKG/collect-licenses.sh" "$RESOURCES/LICENSES" || { echo "FATAL: license collection failed"; exit 1; }
-cp "$RESOURCES/LICENSES/"*.txt "$PKG/LICENSES/" 2>/dev/null || true
 "$PKG/license-audit.sh" "$APP"
 
 echo "=== [5/7] codesign (hardened runtime)"

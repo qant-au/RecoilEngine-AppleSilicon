@@ -1,26 +1,35 @@
 #!/bin/bash
-# license-audit.sh <Spring.app|dir> — release-gate license compliance check.
+# license-audit.sh <bundle.app> — release-gate license compliance check.
 #
-# Asserts, for every Mach-O binary/dylib found in the bundle:
-#   1. it matches exactly one artifact-pattern row in LICENSES/MANIFEST.tsv;
-#   2. the license text for its component exists under LICENSES/;
-#   3. no LGPL component is statically linked (spot check: the engine binary
-#      must NOT export openal/DevIL symbols — they must resolve via dylibs);
-#   4. COPYING and NOTICE are present in the bundle, and COPYING and
-#      LICENSES/GPL-2.0.txt hold the GPL version 2 text itself.
-# Exits non-zero on any violation. Wire into release-build.sh — a bundle
-# that fails this audit must not ship.
+# Everything is checked in the BUNDLE, which is what ships: the manifest, the
+# license texts and the notice are read from Contents/Resources, never from
+# the repository.
+#
+# Asserts:
+#   1. every Mach-O binary/dylib in the bundle matches a row of the bundle's
+#      LICENSES/MANIFEST.tsv, and at least one Mach-O was found;
+#   2. the row's license is one this script knows, and its text is in the
+#      bundle's LICENSES/;
+#   3. no license text in the bundle is empty or holds a "MISSING" placeholder;
+#   4. OpenAL (LGPL) is linked dynamically: the engine binary must not define
+#      its symbols. (DevIL, also LGPL, is linked statically by design; NOTICE
+#      carries the statement that covers it.)
+#   5. COPYING and NOTICE are present, COPYING and LICENSES/GPL-2.0.txt hold
+#      the GPL version 2 text itself, and NOTICE names where the source is.
+# Exits non-zero on any violation. A bundle that fails this audit must not ship.
 set -euo pipefail
 
-BUNDLE=${1:?usage: license-audit.sh <Spring.app or staging dir>}
-HERE=$(cd "$(dirname "$0")" && pwd)
-MANIFEST="$HERE/LICENSES/MANIFEST.tsv"
+BUNDLE=${1:?usage: license-audit.sh <bundle.app>}
+RES="$BUNDLE/Contents/Resources"
+LICDIR="$RES/LICENSES"
+MANIFEST="$LICDIR/MANIFEST.tsv"
 [ -f "$MANIFEST" ] || { echo "FATAL: $MANIFEST missing"; exit 1; }
 
-# license-text presence: map license id -> expected file in LICENSES/
+# license-text presence: map license id -> expected file in LICENSES/.
+# "-" means the text ships as COPYING (checked below).
 lic_file() {
   case "$1" in
-    GPL-2.0-or-later) echo "GPL-2.0.txt";;
+    GPL-2.0|GPL-2.0-or-later) echo "GPL-2.0.txt";;
     MIT|MIT-style*) echo "MIT-collection.txt";;
     Zlib) echo "Zlib.txt";;
     LGPL-2.1*) echo "LGPL-2.1.txt";;
@@ -28,7 +37,6 @@ lic_file() {
     BSD-3-Clause*) echo "BSD-3-Clause-collection.txt";;
     Apache-2.0) echo "Apache-2.0.txt";;
     curl*) echo "curl.txt";;
-    libpng*|IJG*|libtiff*|libwebp*|JasPer*|0BSD) echo "image-codecs-collection.txt";;
     *) echo "";;
   esac
 }
@@ -36,22 +44,35 @@ lic_file() {
 fail=0
 found=0
 
-# 4. bundle-level docs
+# 5. bundle-level docs
 for doc in COPYING NOTICE; do
-  if ! find "$BUNDLE" -name "$doc" | grep -q .; then
+  if [ ! -s "$RES/$doc" ]; then
     echo "VIOLATION: $doc not present in bundle"; fail=1
   fi
 done
+if [ -s "$RES/NOTICE" ] && ! grep -q 'https://github.com/' "$RES/NOTICE"; then
+  echo "VIOLATION: NOTICE does not say where the source code is published"; fail=1
+fi
 
 # the GPL text itself must ship, not a file of that name pointing elsewhere
-for gpl in "$BUNDLE/Contents/Resources/COPYING" "$BUNDLE/Contents/Resources/LICENSES/GPL-2.0.txt"; do
+for gpl in "$RES/COPYING" "$LICDIR/GPL-2.0.txt"; do
   if [ ! -f "$gpl" ] || [ "$(wc -c < "$gpl")" -lt 15000 ] \
      || ! grep -q "GNU GENERAL PUBLIC LICENSE" "$gpl" || ! grep -q "Version 2, June 1991" "$gpl"; then
     echo "VIOLATION: ${gpl#"$BUNDLE"/} is not the GPL version 2 text"; fail=1
   fi
 done
 
-# 1+2. every Mach-O maps to a manifest row with a shipped license text
+# 3. no empty or placeholder text
+for txt in "$LICDIR"/*.txt; do
+  [ -e "$txt" ] || { echo "VIOLATION: no license texts in ${LICDIR#"$BUNDLE"/}"; fail=1; break; }
+  if [ ! -s "$txt" ]; then
+    echo "VIOLATION: ${txt#"$BUNDLE"/} is empty"; fail=1
+  elif grep -q -E '^MISSING|LICENSE MISSING' "$txt"; then
+    echo "VIOLATION: ${txt#"$BUNDLE"/} holds a MISSING placeholder"; fail=1
+  fi
+done
+
+# 1+2. every Mach-O maps to a manifest row with a known license whose text ships
 while IFS= read -r -d '' f; do
   file -b "$f" | grep -q "Mach-O" || continue
   found=$((found+1))
@@ -64,12 +85,17 @@ while IFS= read -r -d '' f; do
   fi
   lic=$(printf '%s' "$row" | cut -f3)
   txt=$(lic_file "$lic")
-  if [ -n "$txt" ] && [ ! -f "$HERE/LICENSES/$txt" ]; then
-    echo "VIOLATION: $base ($lic) — license text LICENSES/$txt missing"; fail=1
+  if [ -z "$txt" ]; then
+    echo "VIOLATION: $base has license \"$lic\", which this audit does not know"; fail=1
+  elif [ ! -s "$LICDIR/$txt" ]; then
+    echo "VIOLATION: $base ($lic): license text LICENSES/$txt is not in the bundle"; fail=1
   fi
-done < <(find "$BUNDLE" -type f \( -perm -111 -o -name "*.dylib" \) -print0)
+done < <(find "$BUNDLE" -type f -print0)
+if [ "$found" -eq 0 ]; then
+  echo "VIOLATION: no Mach-O file found in $BUNDLE, so nothing was audited"; fail=1
+fi
 
-# 3. no static LGPL: engine must import, not define, openal symbols
+# 4. OpenAL must be dynamic: the engine imports, not defines, its symbols
 ENGINE=$(find "$BUNDLE" -type f -name spring | head -1)
 if [ -n "$ENGINE" ]; then
   if nm -gU "$ENGINE" 2>/dev/null | grep -q " _alcOpenDevice$"; then
