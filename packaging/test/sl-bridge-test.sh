@@ -53,7 +53,16 @@ python3 "$WORK/discord.py" "$DTMP/discord-ipc-0" "$WORK/discord.json" & DISCORD=
 printf '%s' '{"log_upload_url":"https://log.example.invalid","discord_rich_presence":{"application_id":"123","minimap_url":"https://maps.example/<map>.jpg","large_image_text_default":"BAR","small_image_key_default":"logo","small_image_text_default":"BAR","button_label":"Play","button_url":"https://www.beyondallreason.info/"}}' > "$WORK/extras.json"
 
 sleep 300 & HOLDER=$!     # stands in for the launcher/engine pid
-TMPDIR="$DTMP/" "$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine /usr/bin/false \
+# The bridge only talks to a process running the --engine binary. The scripted
+# lobby below is python, so python stands in for the engine: ask the kernel for
+# the path it reports for this interpreter (python3 may be a shim).
+PYBIN=$(python3 -c "
+import ctypes, os
+b = ctypes.create_string_buffer(4096)
+ctypes.CDLL('/usr/lib/libproc.dylib').proc_pidpath(os.getpid(), b, 4096)
+print(b.value.decode())")
+[ -x "$PYBIN" ] || { echo "FATAL: could not find the python executable path"; exit 1; }
+TMPDIR="$DTMP/" "$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine "$PYBIN" \
   --engine-version 2026.07.04 --config "$WORK/extras.json" --online 0 \
   --parent-pid "$HOLDER" --log "$WORK/bridge.log" > "$WORK/out" &
 BPID=$!
@@ -133,6 +142,13 @@ python3 "$WORK/baddemo.py" "$WD/demos/bad.sdfz"
 R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"demos/bad.sdfz"}}')
 kill -0 "$BPID" 2>/dev/null && grep -q 'bad demo header: demos/bad.sdfz' "$WORK/bridge.log" \
   && ok "malformed replay rejected, bridge still running" || no "malformed replay: $R"
+
+# Only the engine may connect: the same command sent by another program (nc) is
+# refused before a byte of it is read.
+PORT=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['_sl_port'])" "$WD/sl-connection.json")
+printf '%s\n' '{"name":"ReadReplayInfo","command":{"relativePath":"demos/peer-probe.sdfz"}}' | /usr/bin/nc -w 2 127.0.0.1 "$PORT" >/dev/null 2>&1
+grep -q 'refused a connection that does not come from the engine' "$WORK/bridge.log" && ! grep -q 'peer-probe' "$WORK/bridge.log" \
+  && ok "a connection from another program is refused" || no "a non-engine client was served"
 
 # A peer that does not speak the lobby protocol (an HTTP request, for one) is
 # closed, and a command in its body is never run.

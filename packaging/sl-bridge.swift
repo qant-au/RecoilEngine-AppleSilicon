@@ -108,6 +108,53 @@ func insideWriteDir(_ rel: String) -> URL? {
 }
 
 // ---- connection --------------------------------------------------------------
+// ---- peer check ---------------------------------------------------------------
+// The lobby runs inside the engine, so the only process that may talk to the
+// bridge is one running the engine binary. The listening port is on loopback
+// and any local process (or a web page, through the browser) can reach it, so a
+// connection is accepted only when its other end is a socket owned by a process
+// whose executable is --engine. Processes of other users cannot be inspected
+// and are therefore never accepted.
+let engineResolved = enginePath.isEmpty ? "" : URL(fileURLWithPath: enginePath).resolvingSymlinksInPath().path
+
+func executablePath(_ pid: pid_t) -> String? {
+    var buf = [CChar](repeating: 0, count: 4096)
+    return proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 ? String(cString: buf) : nil
+}
+
+/// Does `pid` hold a TCP socket bound to `localPort` and connected to `remotePort`?
+func ownsTCPSocket(_ pid: pid_t, localPort: UInt16, remotePort: UInt16) -> Bool {
+    let size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
+    guard size > 0 else { return false }
+    var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(size) / MemoryLayout<proc_fdinfo>.stride)
+    let got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, size)
+    guard got > 0 else { return false }
+    for fd in fds.prefix(Int(got) / MemoryLayout<proc_fdinfo>.stride) where fd.proc_fdtype == UInt32(PROX_FDTYPE_SOCKET) {
+        var si = socket_fdinfo()
+        let n = proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &si, Int32(MemoryLayout<socket_fdinfo>.size))
+        guard n == Int32(MemoryLayout<socket_fdinfo>.size), si.psi.soi_kind == SOCKINFO_TCP else { continue }
+        let ini = si.psi.soi_proto.pri_tcp.tcpsi_ini   // ports are in network byte order
+        if UInt16(truncatingIfNeeded: ini.insi_lport).bigEndian == localPort,
+           UInt16(truncatingIfNeeded: ini.insi_fport).bigEndian == remotePort { return true }
+    }
+    return false
+}
+
+func peerIsEngine(peerPort: UInt16, listenPort: UInt16) -> Bool {
+    guard !engineResolved.isEmpty else { return false }
+    for attempt in 0..<3 {
+        if attempt > 0 { usleep(50_000) }
+        var pids = [pid_t](repeating: 0, count: 16384)
+        let n = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        for pid in pids.prefix(max(0, Int(n))) where pid > 0 {
+            guard let exe = executablePath(pid),
+                  URL(fileURLWithPath: exe).resolvingSymlinksInPath().path == engineResolved else { continue }
+            if ownsTCPSocket(pid, localPort: peerPort, remotePort: listenPort) { return true }
+        }
+    }
+    return false
+}
+
 final class Client {
     let conn: NWConnection
     var buffer = Data()
@@ -237,6 +284,30 @@ var downloadQueue: [[String: Any]] = []
 var current: (name: String, process: Process?, task: URLSessionDownloadTask?)? = nil
 let queue = DispatchQueue(label: "sl-bridge")
 
+/// What a resource download leaves in the write dir is data, never something to
+/// run: links are removed (an archive must not plant one that leads out of the
+/// write dir), executable bits are cleared, and every file is quarantined so
+/// macOS checks it before it could ever be opened as a program.
+func neutraliseDownload(_ root: URL) {
+    let fm = FileManager.default
+    let quarantine = Array("0081;\(String(Int(Date().timeIntervalSince1970), radix: 16));sl-bridge;".utf8)
+    func handle(_ url: URL) {
+        guard let type = (try? fm.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType else { return }
+        if type == .typeSymbolicLink { try? fm.removeItem(at: url); return }
+        if type == .typeRegular {
+            if let perm = (try? fm.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber {
+                try? fm.setAttributes([.posixPermissions: NSNumber(value: perm.intValue & ~0o111)], ofItemAtPath: url.path)
+            }
+            _ = quarantine.withUnsafeBufferPointer { setxattr(url.path, "com.apple.quarantine", $0.baseAddress, $0.count, 0, XATTR_NOFOLLOW) }
+        }
+    }
+    handle(root)
+    // the enumerator does not follow links, so removing one here is safe
+    if let walker = fm.enumerator(at: root, includingPropertiesForKeys: nil, options: [], errorHandler: nil) {
+        for case let url as URL in walker { handle(url) }
+    }
+}
+
 func finishDownload(_ name: String, success: Bool, aborted: Bool) {
     queue.async {
         log("Download \(name): \(success ? "ok" : aborted ? "aborted" : "failed")")
@@ -286,13 +357,21 @@ func startNextDownload() {
                     let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
                     p.arguments = ["-x", "-k", tmp.path, dest.path]
                     do { try p.run(); p.waitUntilExit(); ok = p.terminationStatus == 0 } catch { ok = false }
+                    neutraliseDownload(dest)
                 } else {
                     log("Download resource \(name): cannot extract .\(src.pathExtension) (zip only)"); ok = false
                 }
             } else {
-                try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? fm.removeItem(at: dest)
-                do { try fm.moveItem(at: tmp, to: dest) } catch { ok = false }
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: dest.path, isDirectory: &isDir), isDir.boolValue {
+                    // a single file never replaces a folder (pool/, LuaUI/, ...)
+                    log("Download resource \(name): destination is a folder, not replaced"); ok = false
+                } else {
+                    try? fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? fm.removeItem(at: dest)
+                    do { try fm.moveItem(at: tmp, to: dest) } catch { ok = false }
+                    neutraliseDownload(dest)
+                }
             }
             finishDownload(name, success: ok, aborted: false)
         }
@@ -669,6 +748,10 @@ params.acceptLocalOnly = true
 guard let listener = try? NWListener(using: params) else { log("cannot create listener"); exit(1) }
 
 listener.newConnectionHandler = { conn in
+    guard case let .hostPort(_, peerPort) = conn.endpoint, let listenPort = listener.port,
+          peerIsEngine(peerPort: peerPort.rawValue, listenPort: listenPort.rawValue) else {
+        log("refused a connection that does not come from the engine"); conn.cancel(); return
+    }
     let c = Client(conn)
     clients[ObjectIdentifier(c)] = c
     log("lobby connected")
