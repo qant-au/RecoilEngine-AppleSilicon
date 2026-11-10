@@ -2,28 +2,25 @@
 # Build the Recoil engine (BAR macOS layer) against the local Mesa KosmicKrisp stack.
 # Mirrors ExaDev macos-build-gpu.yml.
 #
-# Usage: build-engine.sh [--with-synctest] [--with-visreg] [--with-perf]
+# Usage: build-engine.sh [--with-synctest] [--with-visreg]
 #
 # Tests are OPT-IN (the build itself always runs its fast artifact gates:
 # libm parity hashes, arch checks). Run tests with the build for major
 # changes / large commits, or standalone at any time:
 #   --with-synctest  streflop cross-arch bit-exactness (~seconds, CPU-only)
 #                    standalone: scripts/run-synctest.sh
-#   --with-visreg    visual/artifact regression scenes vs baselines (~3 min)
-#                    standalone: scripts/visreg.sh   (see testkit/visreg/README.md)
-#   --with-perf      adds the m7 perf gate to the visreg run (~+4 min)
-#                    standalone: scripts/visreg.sh --perf
-# Env equivalents: WITH_SYNCTEST=1 WITH_VISREG=1 WITH_PERF=1.
+#   --with-visreg    visual regression vs baselines (~2 min), on the last built
+#                    app bundle. standalone: scripts/visreg.sh
+# Env equivalents: WITH_SYNCTEST=1 WITH_VISREG=1.
 set -euo pipefail
 
 WITH_SYNCTEST="${WITH_SYNCTEST:-0}"
 WITH_VISREG="${WITH_VISREG:-0}"
-WITH_PERF="${WITH_PERF:-0}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --with-synctest) WITH_SYNCTEST=1; shift;;
     --with-visreg)   WITH_VISREG=1; shift;;
-    --with-perf)     WITH_VISREG=1; WITH_PERF=1; shift;;
+    --with-perf)     echo "--with-perf: there is no perf gate yet (scripts/visreg.sh has none)"; exit 2;;
     *) echo "unknown arg: $1 (see header for usage)"; exit 2;;
   esac
 done
@@ -278,18 +275,10 @@ if [ "$WITH_SYNCTEST" = "1" ]; then
   ENGINE_SRC="$SRC" "$BAR/scripts/run-synctest.sh"
 fi
 if [ "$WITH_VISREG" = "1" ]; then
-  echo "=== opt-in: visreg (visual/artifact regression$([ "$WITH_PERF" = 1 ] && echo ", perf gate"))"
-  VISREG_ARGS=()
-  [ "$WITH_PERF" = "1" ] && VISREG_ARGS+=(--perf)
-  # Pin the ENGINE we just built, but leave the DRIVER to ship-config unless the
-  # caller overrode it. Forcing VISREG_MESA="$MESA_PREFIX" here sent the gate the
-  # BUILD-TIME driver default (deps/mesa-native — stale and unstamped), so the
-  # suite silently tested a mixed pair while a bare ./scripts/visreg.sh tested
-  # the shipped one: the same run reported PASS standalone and FAIL (18 lines,
-  # diff_frac=0.4485) inside the suite, on one identical engine. That is exactly
-  # the drift packaging/ship-config.sh exists to prevent, bypassed by the script
-  # that calls it (LESSON-51). Engine and driver are independent axes; building
-  # an engine says nothing about which driver we intend to ship.
-  VISREG_BUILD="$BUILD" ${MESA_PREFIX_EXPLICIT:+VISREG_MESA="$MESA_PREFIX"} \
-    "$BAR/scripts/visreg.sh" ${VISREG_ARGS[@]+"${VISREG_ARGS[@]}"}
+  # visreg plays an app bundle (default: the last 'make app'), not this build
+  # directory: the bare engine cannot load the bundled Vulkan loader. So this
+  # checks whatever bundle is there; release-build.sh --with-visreg is the one
+  # that checks the bundle it has just built.
+  echo "=== opt-in: visreg (on the last built app bundle)"
+  "$BAR/scripts/visreg.sh"
 fi

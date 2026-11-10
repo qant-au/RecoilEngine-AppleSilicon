@@ -109,8 +109,9 @@ from the maintainer:
   were fixed.
 - **A one-command, reproducible build-and-release pipeline.** `make app` builds
   the graphics driver from pinned upstream source, builds the engine, runs the
-  determinism gates, and produces the signed, notarized, drag-to-install
-  `.app`/`.dmg` — nothing fetched or built by hand ([details below](#building-the-macos-app)).
+  libm parity gate, and produces a drag-to-install `.app`/`.dmg` (ad-hoc
+  signed; `make release` signs and notarizes) — nothing fetched or built by
+  hand ([details below](#building-the-macos-app)).
 - **Native optimisation** taking heavy late-game scenes from
   single-digit frame rates to display-class ones at 5K, pixel-identical (table
   below).
@@ -201,11 +202,12 @@ make app         # Accurona, the BAR app: pinned Mesa driver (cached
                  # Accurona.app + .dmg (ad-hoc signed, local use)
 make engine-dist # the Recoil engine alone (no BAR helper/branding):
                  # Recoil-macos-<engine>-port<ver>.zip
-make certify     # app + full replay-determinism certification (GPU, ~1h)
+make certify     # app + sync test, replay certification, visual regression
+                 #   (GPU; needs a fleet demo, see below)
 make release     # certified + Developer ID signed + notarized (needs
                  #   IDENTITY="Developer ID Application: ..." and
                  #   NOTARY_PROFILE=<notarytool keychain profile>)
-make engine      # just the engine binary, with the sync gates
+make engine      # just the engine binary, with the libm parity gate
 ```
 
 **Online play is disabled by default** in every build, source builds included
@@ -233,11 +235,15 @@ packaging/test/message-check-test.sh && packaging/test/launcher-test.sh
 What the build does, in order: builds the Mesa Zink+KosmicKrisp driver from
 the pinned upstream commit + `patches/mesa/` (provenance-stamped, skipped
 when already built); builds the engine against it with the deterministic-FP
-configuration; runs the libm fleet-parity hash gate and the cross-arch
-streflop sync-test; stages, signs, and (for `make release`) notarizes the
-bundle with the styled drag-to-install DMG. Heavier validation (full-replay
-determinism, GPU driver-identity smoke) is the certify tier — mirroring
-upstream Recoil CI, where build and validation are separate workflows.
+configuration; runs the libm fleet-parity hash gate; stages, signs, and (for
+`make release`) notarizes the bundle with the styled drag-to-install DMG.
+Heavier validation (the cross-arch streflop sync-test, full-replay
+determinism, visual regression, GPU driver-identity smoke) is the certify
+tier, which `make certify` and `make release` run — mirroring upstream Recoil
+CI, where build and validation are separate workflows. The certify tier needs
+a fleet demo recorded on this engine version: put it in `refdemos/<engine>/`
+or set `RELEASE_SMOKE_DEMO=<file.sdfz>` (`scripts/find-fleet-replays.py
+<engine>` lists public ones).
 
 ## Runtime knobs
 

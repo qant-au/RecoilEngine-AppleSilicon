@@ -2,18 +2,21 @@
 # release-build.sh — end-to-end signed/notarized release artifact pipeline.
 #
 # Produces Accurona.app (staged, signed, optionally notarized) from
-# the pinned engine tree + pinned/patched Mesa, with EVERY release gate
-# unskippable in-line:
+# the pinned engine tree + pinned/patched Mesa:
 #   build (via scripts/build-engine.sh: -O3 RELWITHDEBINFO, gcc dbl-64 swap,
-#   dfp-verify 9/9 fleet-parity gate) → replay smoke → bundle staging →
-#   license collection + license-audit → codesign (hardened runtime,
-#   get-task-allow FORBIDDEN) → notarize+staple (when identity provided) →
-#   ditto zip.
+#   dfp-verify 9/9 fleet-parity gate) → [sync-test] → [replay certification] →
+#   bundle staging → license collection + license-audit → codesign (hardened
+#   runtime, get-task-allow FORBIDDEN) → [visreg on the signed bundle] →
+#   notarize+staple (when identity provided) → ditto zip.
+# The stages in brackets are opt-in for an ad-hoc build and always run for a
+# Developer ID build (--identity); see "test stages" below.
 #
 # Usage:
 #   packaging/release-build.sh [--identity "Developer ID Application: ..."]
 #                              [--notary-profile <keychain-profile>]
-#                              [--version <tag>] [--skip-replay-smoke]
+#                              [--version <tag>] [--profile bar|engine]
+#                              [--with-synctest] [--with-visreg] [--certify]
+#                              [--enable-online | --disable-online]
 # Without --identity the bundle is ad-hoc signed (local testing only; will
 # not pass Gatekeeper on other machines). Notarization runs only when both
 # --identity and --notary-profile are given.
@@ -116,19 +119,17 @@ UPDATE_SIGNING_KEY="${ACCURONA_UPDATE_SIGNING_KEY:-$HOME/.accurona/update-signin
 # or standalone):
 #   - --with-synctest  streflop bit-exactness (CPU-only, seconds).
 #                      standalone: scripts/run-synctest.sh
-#   - --with-visreg    visual/artifact regression vs baselines (~3 min).
+#   - --with-visreg    visual regression vs baselines (~2 min), run on the
+#                      bundle this build has just staged and signed.
 #                      standalone: scripts/visreg.sh
-#   - --with-perf      adds the m7 perf gate to visreg (~+4 min).
-#                      standalone: scripts/visreg.sh --perf
 #   - --certify        replay smoke (headless full-game re-sim; tens of
 #                      minutes; needs game content). CERTIFICATION, not a
 #                      build gate.
-# A SHIPPING artifact must have passed sync-test + visreg(+perf) + certify —
-# skipped stages warn loudly below but do not hard-fail, so build boxes can
-# package; run the missing stages standalone before publishing.
+# A SHIPPING artifact must have passed sync-test + visreg + certify. An ad-hoc
+# build only warns about a skipped stage, so build boxes can package; a
+# Developer ID build (--identity) always runs all three.
 RUN_SYNC_TEST=${RELEASE_SYNC_TEST:-0}
 RUN_VISREG=${RELEASE_VISREG:-0}
-RUN_VISREG_PERF=0
 REPLAY_SMOKE=${RELEASE_CERTIFY:-0}
 
 while [ $# -gt 0 ]; do
@@ -153,10 +154,17 @@ while [ $# -gt 0 ]; do
     --with-synctest) RUN_SYNC_TEST=1; shift;;
     --skip-sync-test) RUN_SYNC_TEST=0; shift;;     # now the default; kept for compat
     --with-visreg) RUN_VISREG=1; shift;;
-    --with-perf) RUN_VISREG=1; RUN_VISREG_PERF=1; shift;;
+    --with-perf) echo "--with-perf: there is no perf gate yet (scripts/visreg.sh has none)"; exit 2;;
     *) echo "unknown arg: $1"; exit 2;;
   esac
 done
+
+# A Developer ID build is one meant to go out, so it runs every gate whatever
+# flags were given; only an ad-hoc build may skip them.
+if [ "$IDENTITY" != "-" ]; then
+  RUN_SYNC_TEST=1; REPLAY_SMOKE=1
+  [ "$PROFILE" = "bar" ] && RUN_VISREG=1
+fi
 
 case "$PROFILE" in
   bar)    APP="$OUT/Accurona.app";;
@@ -218,20 +226,6 @@ else
   echo "         --with-synctest or standalone: scripts/run-synctest.sh"
 fi
 
-echo "=== [1c/7] visreg (visual/artifact/perf regression)"
-if [ "$RUN_VISREG" = "1" ]; then
-  VR_ARGS=()
-  [ "$RUN_VISREG_PERF" = "1" ] && VR_ARGS+=(--perf)
-  # visreg plays the LAST BUILT app bundle (release-artifacts/Accurona.app):
-  # the bare build-engine binary cannot load the bundled Vulkan loader
-  VISREG_BUILD="$BUILD" VISREG_MESA="$MESA_PREFIX" \
-    "$BAR/scripts/visreg.sh" ${VR_ARGS[@]+"${VR_ARGS[@]}"} \
-    || { echo "FATAL: visreg regression gate failed"; exit 1; }
-else
-  echo "WARNING: visreg SKIPPED (opt-in). Before shipping run with"
-  echo "         --with-visreg [--with-perf] or standalone: scripts/visreg.sh --perf"
-fi
-
 echo "=== [2/7] replay certification (opt-in; --certify / RELEASE_CERTIFY=1)"
 if [ "$REPLAY_SMOKE" = "1" ]; then
   # FOLLOW THE ENGINE WE ARE PACKAGING, do not name a lane. This glob was pinned
@@ -245,15 +239,18 @@ if [ "$REPLAY_SMOKE" = "1" ]; then
   SMOKE_DEMO="${RELEASE_SMOKE_DEMO:-}"
   if [ -z "$SMOKE_DEMO" ]; then
     # per-lane directory first (current layout), then the flat legacy naming
-    SMOKE_DEMO=$(ls "$BAR/refdemos/$VERSION"/*.sdfz 2>/dev/null | sort | head -1)
-    [ -n "$SMOKE_DEMO" ] || SMOKE_DEMO=$(ls "$BAR"/refdemos/*_"$VERSION".sdfz 2>/dev/null | sort | head -1)
+    # (|| true: with pipefail a missing folder would end the script right here,
+    # before the explanation below is ever printed)
+    SMOKE_DEMO=$(ls "$BAR/refdemos/$VERSION"/*.sdfz 2>/dev/null | sort | head -1 || true)
+    [ -n "$SMOKE_DEMO" ] || SMOKE_DEMO=$(ls "$BAR"/refdemos/*_"$VERSION".sdfz 2>/dev/null | sort | head -1 || true)
   fi
   [ -n "$SMOKE_DEMO" ] || {
     echo "FATAL: --certify given but no smoke demo recorded on engine $VERSION."
     echo "       Searched: refdemos/$VERSION/*.sdfz and refdemos/*_$VERSION.sdfz"
     echo "       A demo from another engine version CANNOT certify this one --"
     echo "       replay-check.sh refuses it as VERSION_MISMATCH. Record a demo on"
-    echo "       this lane, or point RELEASE_SMOKE_DEMO at one."
+    echo "       this lane, or point RELEASE_SMOKE_DEMO at one (a public fleet"
+    echo "       replay works: scripts/find-fleet-replays.py $VERSION)."
     exit 1; }
   echo "smoke demo: $(basename "$SMOKE_DEMO") (engine $VERSION)"
   ENGINE_BUILD="$BUILD" "$BAR/scripts/replay-check.sh" "$SMOKE_DEMO" \
@@ -465,6 +462,11 @@ if [ -f "$MESA_PREFIX/.driver-provenance" ]; then
 else
   echo "unverified (driver built out-of-band; rebuild with MESA_FORCE_REBUILD=1 to stamp)" \
     > "$RESOURCES/DRIVER-PROVENANCE.txt"
+  if [ "$IDENTITY" != "-" ]; then
+    echo "FATAL: the bundled driver has no provenance stamp; a Developer ID build must"
+    echo "       ship a driver built by scripts/build-mesa-kk.sh (MESA_FORCE_REBUILD=1)"
+    exit 1
+  fi
   echo "WARN: bundled driver has no provenance stamp — see DRIVER-PROVENANCE.txt"
 fi
 
@@ -780,6 +782,17 @@ if codesign -d --entitlements - --xml "$APP/Contents/MacOS/spring" 2>/dev/null |
 fi
 codesign --verify --deep --strict "$APP"
 echo "codesign OK (identity: ${IDENTITY})"
+
+echo "=== [5b/7] visreg (visual regression on the bundle just built)"
+if [ "$RUN_VISREG" = "1" ] && [ "$PROFILE" = "bar" ]; then
+  VISREG_APP="$APP" "$BAR/scripts/visreg.sh" \
+    || { echo "FATAL: visreg regression gate failed"; exit 1; }
+elif [ "$RUN_VISREG" = "1" ]; then
+  echo "(engine profile: visreg plays the app bundle, so it runs in the bar profile)"
+else
+  echo "WARNING: visreg SKIPPED (opt-in). Before shipping run with"
+  echo "         --with-visreg or standalone: scripts/visreg.sh"
+fi
 
 echo "=== [6/7] notarization"
 mkdir -p "$OUT"

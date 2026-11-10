@@ -8,8 +8,10 @@
 #                       # Reason.app + .zip + .dmg. Fast; no GPU/content/long
 #                       # tests. Runs on THIS Mac; won't pass Gatekeeper elsewhere.
 #   make certify        # certify tier (needs an Apple Silicon GPU + content):
-#                       # build + package + replay-determinism cert + GPU driver
-#                       # smoke. This is the long one (tens of minutes).
+#                       # build + package + streflop sync test + replay
+#                       # certification + visual regression + GPU driver smoke.
+#                       # Needs a fleet demo for this engine: refdemos/<engine>/
+#                       # or RELEASE_SMOKE_DEMO=<file.sdfz>.
 #   make release        # Developer ID signed + notarized + CERTIFIED distributable
 #                       #   IDENTITY="Developer ID Application: NAME (TEAMID)" \
 #                       #   NOTARY_PROFILE=<keychain-profile> make release
@@ -53,12 +55,12 @@ engine-dist:
 	packaging/release-build.sh --profile engine $(VERSION_ARG)
 
 certify:
-	packaging/release-build.sh --certify $(VERSION_ARG) $(ONLINE_ARG)
+	packaging/release-build.sh --certify --with-synctest --with-visreg $(VERSION_ARG) $(ONLINE_ARG)
 
 release:
 	@test -n "$(IDENTITY)" || { echo "release: set IDENTITY=\"Developer ID Application: ...\" (and NOTARY_PROFILE for notarization)"; exit 2; }
 	packaging/release-build.sh \
-	  --certify \
+	  --certify --with-synctest --with-visreg \
 	  --identity "$(IDENTITY)" \
 	  $(if $(NOTARY_PROFILE),--notary-profile "$(NOTARY_PROFILE)",) \
 	  $(VERSION_ARG) $(ONLINE_ARG)
