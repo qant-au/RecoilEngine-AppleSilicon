@@ -14,6 +14,12 @@
 #   5. exec the engine against the user's write dir.
 set -uo pipefail
 
+# Do not pass on switches that weaken or redirect what the app starts: the
+# downloader's certificate overrides (TLS is the only integrity protection the
+# game content has in transit) and the two variables that make a shell source a
+# file at start.
+unset PRD_DISABLE_CERT_CHECK PRD_SSL_CERT_FILE PRD_SSL_CERT_DIR BASH_ENV ENV
+
 HERE=$(cd "$(dirname "$0")" && pwd)          # .../Contents/MacOS
 CONTENTS=$(dirname "$HERE")
 RES="$CONTENTS/Resources"
