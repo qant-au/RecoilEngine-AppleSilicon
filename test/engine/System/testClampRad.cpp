@@ -94,3 +94,28 @@ TEST_CASE("ClampRadPi")
 	CHECK(RadAngleToCobShort(ClampRadPi((math::PI))) == short(-32768));
 }
 
+TEST_CASE("FloatToHeadingWrapped")
+{
+	// in range of short: the plain conversion, truncating toward zero
+	CHECK(FloatToHeadingWrapped(0.0f) == 0);
+	CHECK(FloatToHeadingWrapped(1234.9f) == 1234);
+	CHECK(FloatToHeadingWrapped(-1234.9f) == -1234);
+	CHECK(FloatToHeadingWrapped(32767.0f) == 32767);
+	CHECK(FloatToHeadingWrapped(-32768.0f) == -32768);
+
+	// in range of int: the low 16 bits, so headings wrap
+	CHECK(FloatToHeadingWrapped(32768.0f) == -32768);
+	CHECK(FloatToHeadingWrapped(65536.0f) == 0);
+	CHECK(FloatToHeadingWrapped(65537.0f) == 1);
+	CHECK(FloatToHeadingWrapped(-65537.0f) == -1);
+	CHECK(FloatToHeadingWrapped(2147483520.0f) == -128); // largest float below 2^31
+
+	// outside int, and NaN: what x86 computes (INT_MIN, low 16 bits 0), on every platform
+	CHECK(FloatToHeadingWrapped(2147483648.0f) == 0);
+	CHECK(FloatToHeadingWrapped(3.0e9f) == 0);
+	CHECK(FloatToHeadingWrapped(-3.0e9f) == 0);
+	CHECK(FloatToHeadingWrapped(-2147483648.0f) == 0);
+	CHECK(FloatToHeadingWrapped(std::numeric_limits<float>::infinity()) == 0);
+	CHECK(FloatToHeadingWrapped(-std::numeric_limits<float>::infinity()) == 0);
+	CHECK(FloatToHeadingWrapped(std::numeric_limits<float>::quiet_NaN()) == 0);
+}

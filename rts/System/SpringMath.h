@@ -53,6 +53,7 @@ int GetFacingFromHeading(const short int heading) _pure _warn_unused_result;
 float GetHeadingFromVectorF(const float dx, const float dz) _pure _warn_unused_result;
 short int GetHeadingFromVector(const float dx, const float dz) _pure _warn_unused_result;
 short int FloatToHeading(const float angle) _pure _warn_unused_result;
+short int FloatToHeadingWrapped(const float angle) _pure _warn_unused_result;
 shortint2 GetHAndPFromVector(const float3 vec) _pure _warn_unused_result; // vec should be normalized
 float2 GetHAndPFromVectorF(const float3 vec) _pure _warn_unused_result; // vec should be normalized
 float3 GetVectorFromHeading(const short int heading) _pure _warn_unused_result;

@@ -54,9 +54,9 @@ short GMTDefaultPathController::GetDeltaHeading(
 	short deltaHeading = newHeading - oldHeading;
 
 	if (deltaHeading > 0) {
-		deltaHeading = std::min(deltaHeading, short(int( maxTurnRate)));
+		deltaHeading = std::min(deltaHeading, FloatToHeadingWrapped( maxTurnRate));
 	} else {
-		deltaHeading = std::max(deltaHeading, short(int(-maxTurnRate)));
+		deltaHeading = std::max(deltaHeading, FloatToHeadingWrapped(-maxTurnRate));
 	}
 
 	// no orientation changes if not on ground
@@ -91,7 +91,7 @@ short GMTDefaultPathController::GetDeltaHeading(
 
 	// less realistic to nullify speed in air, but saves headaches
 	// (high-turnrate units leaving the ground do not behave well)
-	return short(int(*curTurnSpeedPtr = std::clamp(curTurnSpeed * (1 - owner->IsInAir()), -maxTurnSpeed, maxTurnSpeed)));
+	return FloatToHeadingWrapped(*curTurnSpeedPtr = std::clamp(curTurnSpeed * (1 - owner->IsInAir()), -maxTurnSpeed, maxTurnSpeed));
 }
 
 bool GMTDefaultPathController::IgnoreTerrain(const MoveDef& md, const float3& pos) const {

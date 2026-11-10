@@ -33,6 +33,20 @@ inline short int FloatToHeading(const float angle)
 	return static_cast<short int>(angle);
 }
 
+// For a float that reaches a heading without being known to be in range: an
+// argument from Lua, a turn rate a script set. In range of int this is the
+// plain conversion, whose low 16 bits wrap as headings are meant to. Outside
+// it (and for NaN) the conversion is undefined: x86 produces INT_MIN, whose
+// low 16 bits are 0, while arm64 saturates and gives -1. Return what x86
+// computes, on every platform.
+inline short int FloatToHeadingWrapped(const float angle)
+{
+	if (angle >= -2147483648.0f && angle < 2147483648.0f)
+		return static_cast<short int>(static_cast<int>(angle));
+
+	return static_cast<short int>(std::numeric_limits<int>::min());
+}
+
 inline int GetFacingFromHeading(const short int heading)
 {
 	if (heading >= 0) {
