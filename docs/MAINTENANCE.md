@@ -1,177 +1,222 @@
-# Maintenance — how the macOS layer rides upstream
+# Maintenance
 
-The port's survival thesis (PORTING_PRINCIPLES §1.1): **every unmergeable macOS
-mega-fork has died** when its maintainer left. So the macOS work is kept as a
-*thin, rebasable patch series on top of an upstream release tag*, not a
-divergent fork. This doc is the procedure for keeping it that way.
+How the macOS layer follows upstream: where the repository stands, how a new
+upstream release is merged, the submodule forks, the Mesa pin and patches,
+and the check that keeps the Linux and Windows builds working. Version
+numbers are in [VERSIONS.md](VERSIONS.md). Releasing is in
+[RELEASING.md](RELEASING.md).
 
-## Branch model
+## The Model
 
-```
-upstream release tag (e.g. 2025.06.24)         ← beyond-all-reason/RecoilEngine
-        │
-        └── macos-<version>     = the tag + the macOS layer
-                                  (upstream cherry-picks the tag predates +
-                                   the platform / render / packaging work)
-```
+`main` is an upstream Recoil release tag with the macOS layer on top. A new
+upstream release is **merged** into `main`; `main` is never rebased or
+rewritten. The layer is whatever `git diff <tag> main` shows.
 
-The macOS layer is what sits between the upstream tag and the branch tip. Keep it
-**reviewable and scoped** so each piece can be upstreamed and so a rebase onto
-the next tag is mechanical:
+Keep the layer small and scoped, so each piece can go upstream and a merge
+stays mechanical:
+
 - platform code under `rts/System/Platform/Mac/`;
-- rendering/present under `rts/Rendering/` and `Platform/Mac/MacPresentBackend`;
-- cross-platform features (e.g. `WindowTitle`) unscoped and generic — no
-  `#ifdef __APPLE__`, so upstream can take them as-is;
-- **nothing under `rts/Sim/` or `rts/lib/streflop/` changes behavior** except
-  the deterministic-FP work, which is enumerated in
-  `SYNC_VALIDATION.md` Appendix A and is itself an upstream candidate.
+- a change to a shared file is guarded for Apple unless it is a fix every
+  platform should have, and then it is written so upstream could take it
+  as it is;
+- synced code changes only under the rules in
+  [DETERMINISM.md](DETERMINISM.md);
+- a change upstream's maintainers decline is removed here, so games stay
+  portable between this build and theirs ([UPSTREAM.md](UPSTREAM.md)).
 
-Shipping happens on the pinned tag + macOS layer, nothing else: lockstep
-multiplayer requires byte-identical simulation to the version the live fleet
-runs.
+## Where The Repository Stands
 
-## Where this repository stands (measured 2026-11-09)
-
-- **Base:** upstream release tag `2026.09.02`, BAR's Engine Test engine.
-  Production still runs `2026.07.04`; this repository moved ahead of it on
-  2026-11-09 by decision (releases target the engine BAR is moving to), by
-  merging the tag into the layer rather than rebasing, so `main` was never
-  rewritten. Measure, don't assume: the engine for each BAR setup is in
+- **Base:** the upstream release tag named in [VERSIONS.md](VERSIONS.md). It
+  was merged on 2026-11-09 (commit `c3f400b6cd`). It is BAR's Engine Test
+  engine and is ahead of production by decision: releases target the engine
+  BAR is moving to. Measure which engine each BAR setup runs; do not assume:
   [BYAR-Chobby `dist_cfg/config.json`](https://github.com/beyond-all-reason/BYAR-Chobby/blob/master/dist_cfg/config.json)
-  (`manual-linux` / `manual-win` = production, `*-test-engine` = the next one;
-  2026.09.02 as of 2026-10-27).
-- **Against `master`:** about 120 commits ahead and 180 behind. Recoil cuts
-  releases on branches, so neither 2026.07.04 nor 2026.09.02 is on `master`, and
-  "behind master" is mostly unreleased work. Track releases, watch `master` for
-  fixes we need.
-- **Remotes:** `origin` = this repository; `upstream` =
-  `beyond-all-reason/RecoilEngine` (fetch-only, for tags);
-  `benbreen` = the original port (fetch-only, inactive since 2026-08).
-  `vandomas` = Vandomas/RecoilEngine-AppleSilicon, another fork of the original
-  port (fetch-only; reviewed 2026-11-09 for work to bring in, with credit).
-- **Already upstream as of 2026.09.01/2026.09.02** (drop ours at that rebase,
-  take upstream's): the float->short heading UB fix (`da974d379b`, #3342;
-  replaces our `8a041014a2`; once the fleet runs it, sync must match upstream's
-  version, not ours), `views::enumerate` compat (#3289), and the testClampRad
-  fix (#3290). `CSolidObject::paletteIndex` is creg-registered on `master` but
-  not yet in a tag.
-- **Non-Mac builds must keep working.** This layer edits shared files, and a
-  Linux/Windows break is invisible from a Mac build (an SDL >= 2.0.18-only field
-  in `MouseInput.cpp` broke the Linux build until 2026-11-08). Before pushing a
-  change outside `Platform/Mac`, run `scripts/check-nonmac.sh` (Linux build,
-  Linux unit tests, Windows cross-build, all in Docker; prints `NONMAC_OK`).
-  It needs bash 4+ (Homebrew bash) and amd64 runs emulated on Apple Silicon,
-  so a cold run is slow; later runs are incremental.
-  GitHub Actions are disabled on this repository by decision: all builds and
-  tests are local.
-  If Actions are ever re-enabled, only the non-Mac guard should run. The
-  workflows inherited from upstream that publish or act for BAR are disabled
-  one by one on GitHub (`gh workflow disable`, so the files stay identical to
-  upstream and merges stay clean): `bar-cdn-publish`, `publish-site`,
-  `docker-images-build`, `generate-lua-library` and `opencode` (it runs an
-  unpinned `@latest` action on any issue comment). Still enabled:
-  `engine-build` (Linux + Windows), `synctest`, `streflop-float-test`,
-  `release-build` (all manual-only), and `check-lua` and `assemble` (small
-  Linux jobs on push). There is no macOS job: macOS runners cost money and the
-  macOS checks run locally. Check the state with
+  (`manual-linux` and `manual-win` are production, the `*-test-engine`
+  entries are the next engine).
+- **Against upstream `master`:** Recoil cuts releases on branches, so a
+  release tag is not on `master` and "behind master" is mostly unreleased
+  work. Measure with `git rev-list --left-right --count upstream/master...main`.
+  Follow release tags; watch `master` for fixes worth carrying.
+- **Remotes:** `origin` is this repository. `upstream` is
+  `beyond-all-reason/RecoilEngine`, fetch only. The original port and another
+  fork of it are kept as fetch-only remotes for reference.
+- **CI:** GitHub Actions are disabled on this repository by decision. Every
+  build and test is local. The workflows inherited from upstream that publish
+  or act for BAR are also disabled one by one on GitHub (`gh workflow
+  disable`), so the files stay identical to upstream and merges stay clean.
+  There is no macOS job upstream. Check the state with
   `gh api repos/qant-au/RecoilEngine-AppleSilicon/actions/workflows --jq '.workflows[]|[.path,.state]|@tsv'`.
+- **Branch protection:** `main` cannot be force-pushed or deleted.
 
-## Bumping to a new upstream pin (the version-bump procedure)
+## Merging A New Upstream Release
 
-When the fleet moves to a new engine version `NEW` (e.g. 2026.06.08):
+Do this when BAR's Engine Test channel moves to a new engine version `NEW`.
 
-Players are told automatically: on every launch the launcher reads BAR's
-production engine from BYAR-Chobby's `dist_cfg/config.json` (setup
-`manual-linux`) and, when it is newer than the engine in the app, shows a
-"New Version Needed" dialog with a download button (`engine_nudge` in
-`packaging/launcher.sh`; test: `packaging/test/engine-nudge-test.sh`). It
-stops by itself once the player installs an app with that engine, so no
-message-config entry is needed. The download button opens
-`BAR_RELEASES_URL` (the fork's latest GitHub release until the release
-location is decided).
+1. **Fetch and merge the tag.**
 
-1. **Branch from the upstream tag**, not from the old macOS branch:
    ```sh
    git fetch upstream --tags
-   git checkout -b macos-NEW NEW
+   git checkout main
+   git merge NEW
    ```
-2. **Replay the macOS layer.** Rebase/cherry-pick the layer commits (the range
-   `OLD_TAG..macos-OLD`, dropping the upstream cherry-picks the new tag already
-   contains) onto `macos-NEW`. The commits are single-concern and rebasable by
-   design.
-3. **Resolve at the seams, not in Sim.** Conflicts should land in the macOS
-   files above. If a conflict forces a change under `rts/Sim/` or streflop,
-   stop — that is a determinism risk, not a merge chore (PORTING_PRINCIPLES §2).
-4. **Re-run the gates** (all must pass on `macos-NEW` before it is a pin):
-   ```sh
-   scripts/build-engine.sh                 # + libm fleet-parity hash gate
-   # streflop cross-arch sync-test: BIT-EXACT vs both committed references
-   # replay determinism: REPLAY_SYNC_OK on a NEW-version demo
-   make certify                            # full packaging + GPU + replay cert
-   ```
-   Regenerate the streflop references only if the new tag deliberately changed
-   streflop; otherwise a diff there is a bug, not an update.
-5. **Update `docs/VERSIONS.md`** — never bump a pin silently.
 
-## Releasing the app
+   Resolve conflicts in the macOS files. A change of ours that the new tag
+   now contains is dropped in favour of upstream's version, also when ours
+   differs: once the fleet runs upstream's code, sync must match theirs. If a
+   conflict forces a new change under `rts/Sim/` or in streflop, stop: that is
+   a determinism question, not a merge chore.
+2. **Move the submodule forks.** `tools/pr-downloader` and
+   `AI/Skirmish/BARb` are forks with one commit each on a branch named for
+   the engine version. For each: create a branch at the commit the new tag
+   pins, re-apply our commit (or drop it if upstream has it), push the
+   branch, and update `.gitmodules` and the submodule pointer. See
+   [Submodule Forks](#submodule-forks).
+3. **Update the BYAR-Chobby pin.** `SHIP_CHOBBY_COMMIT` in
+   `packaging/ship-config.sh` names the BYAR-Chobby commit whose launcher
+   configuration the app ships. Move it to a commit that lists `NEW`.
+4. **Build and run every test** in [BUILDING.md](BUILDING.md):
+   `make engine`, `scripts/run-synctest.sh`, `scripts/run-unit-tests.sh`,
+   `make test`. The libm and streflop references are regenerated only if the
+   new tag changed streflop on purpose; otherwise a difference there is a
+   bug, not an update. If the unit-test result changed, find out whether
+   upstream's did.
+5. **Get a fleet demo recorded on `NEW`** and run the replay check on it.
+   A demo from the old version cannot be used: the check refuses it.
+   `scripts/find-fleet-replays.py NEW` lists public ones. Prefer a 1v1, a
+   full team game and a Raptors or Scavengers game.
+6. **Make new visual-regression baselines.** The pictures are stored per
+   engine version and demo (`testkit/visreg/<engine>/<demo>/`). Run
+   `scripts/visreg.sh --demo <new demo>`, look at every picture, and only
+   then `--bless`. Update the script's default demo.
+7. **Run the Linux and Windows check** (`scripts/check-nonmac.sh`), then the
+   same replay on the Linux build it produced, and go through the
+   [Non-Mac Runtime Checklist](#non-mac-runtime-checklist).
+8. **Regenerate the register** of synced-code changes
+   ([SYNC_VALIDATION.md](SYNC_VALIDATION.md), Appendix A) from the diff, with
+   the command printed there, and add an evidence section for `NEW`.
+9. **Update the documents:** [VERSIONS.md](VERSIONS.md) (never move a pin
+   silently), [PARITY.md](PARITY.md) (re-measure the rows, change the date),
+   [UPSTREAM.md](UPSTREAM.md) (rows that are now in the tag).
+10. **`make certify`**, then commit and push.
 
-`make app` (build/package, headless-safe) and `make certify` / `make release`
-(adds GPU + replay certification). The engine pin is read from the built
-engine (`spring --version`) and kept in `CFBundleVersion`/`EngineVersion`;
-the user-facing release number comes from `packaging/PORT_VERSION`. See the
-README "Building the macOS app". Long, GPU-, and content-dependent validation
-is opt-in so build machines can package — mirrors upstream Recoil CI, where
-the build workflow builds and a separate workflow validates.
+Players on an older app are told by themselves: the app compares its engine
+with BAR's production engine at each launch ([RELEASING.md](RELEASING.md),
+The Engine Notice).
 
-**Release-notes caution block: RETIRED as a rule (2026-07-24).** Release notes
-no longer have to start with `packaging/release-notes-header.md` — v0.12 ships
-without it, since the same caution is carried by the README and the first-run
-consent dialog, where a player actually meets it. The file is kept for reuse,
-but nothing requires it. The consent dialog and the README caution DO still
-have to agree with each other: if one changes, change the other.
+## Submodule Forks
 
-**Every release must also review `message-config/messages/`.** Live messages
-are fetched by every existing install and are version-targeted; a release that
-changes behavior can make a live message wrong (e.g. when online play is
-enabled, the "online disabled" messaging must be capped so it does not target
-the new version — `"target": {"op": "le", "version": "<last-disabled>"}`).
-Propose the concrete message changes and get the maintainer's explicit
-sign-off before publishing the release.
+| Submodule | Fork And Branch | Our Change |
+|---|---|---|
+| `tools/pr-downloader` | `qant-au/pr-downloader`, branch `macos-<engine>` | one commit on upstream's pin: HTTP/1.1 for BAR's content network on macOS |
+| `AI/Skirmish/BARb` | `qant-au/CircuitAI`, branch `macos-arm64-<engine>` | one commit on upstream's pin: the AngelScript arm64 assembly file in CMake |
+| `AI/Skirmish/CircuitAI` | none: upstream's commit | `patches/circuitai/*.patch`, applied to the working tree by `scripts/build-engine.sh`; `.gitmodules` sets `ignore = dirty` for it |
 
-**In-app updates (`packaging/updater.swift`).** Each launch the app reads a
-signed feed, by default
-`https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/latest/download/appcast.json`
-(`--update-feed` on `release-build.sh` changes it). When the private release
-key is at `~/.accurona/update-signing.key`, a Developer ID signed, notarized
-build (`make release`) writes `release-artifacts/appcast.json` beside the zip.
-An ad-hoc build (`make app`) never writes one, because the feed signature does
-not expire and would offer that build to every older copy. Publish both as assets of the
-release tagged `v<PORT_VERSION>`, and every install older than it offers the
-update. The app only installs an archive that verifies against the public key in
-`packaging/update-public-key`, has our bundle identifier and the promised
-version, and passes `codesign --verify --deep --strict` (and, once releases are
-Developer ID signed, has the same team). **Back up the private key.** If it is
-lost, existing installs can never be updated in-app again; they still see the
-engine nudge and can download by hand. To replace the key, ship one release
-signed with the old key that carries the new public key. `packaging/test/updater-test.sh`
-covers the swap and every refusal.
+The forks must stay public at the commits a release was built from: they are
+part of the corresponding source. The exact commits are in
+[VERSIONS.md](VERSIONS.md).
 
-## What to upstream (keep the layer shrinking)
+## The Mesa Driver
 
-`docs/UPSTREAM_CANDIDATES.md` tracks the fixes that belong upstream (LuaVAO
-primitive-restart, stream-buffer wait, the float→int UB sweep, WindowTitle, …).
-Every commit that lands upstream is one fewer to rebase next version — the
-patch series should trend *smaller*, not larger, as the port matures.
+The app ships Mesa's Zink and KosmicKrisp drivers, built by
+`scripts/build-mesa-kk.sh` from a pinned upstream commit plus the patches in
+`patches/mesa/`. `make engine` and `make app` call the script; it does
+nothing when the installed driver is current.
 
-## Ongoing Ehancements and Bug Fixes
-- Don't start fixing a bug until you have developed a way to reliable reproduce it autonymously. Don't implement a new feature without a test and acceptance plan.
-- Ensure you do not cause new regressions to logic, UI, performance such as FPS with any fix. If it touches an area which could cause a regression, make sure you test afterwards as part of the validation of the fix.
-- When making changes or fixes and you notice an unreported bug, do not ignore it, tackle that too once your current task has finished, or make sure it is logged as a bug for a future fix. This includes visual bugs.
-- Make sure you check upstream repos where relevant for similar bug reports or previous fixes.
-- Ensure the fix is done in a way which is as painless as possible to later upstream. If it's not working on Apple and it is working on other platforms, don't simply change the logic for Apple, ask why. Maintainers are unlikely to accept it without good reason.
-- Identify and fix root causes rather than ad-hoc fixes, or if not possible, prompt the user asking what to do.
-- Every graphical fix must come with a regression test in the visreg harness (a testcard cell, scene shot, artifact detector, or logscan pattern that FAILS on the broken behavior), run before/after the fix, and a rebaseline. Run `scripts/visreg.sh --perf` before promoting any graphics/driver/present change. Harness + token-budget rules: `testkit/visreg/README.md` (outer working tree).
-- If an issue cannot be recreated or fixed, or the fix is not fully confident, make sure infolog.txt would carry enough information for the NEXT report to be diagnosable (add targeted log lines / counters around the suspected area, verify they appear, ship them). Every infolog already identifies the port release (BAR_PORT_VERSION line), engine version, and game content (gametype line) — keep it that way.
-- Builds run NO test stages by default (fast artifact gates only). For major changes or large commits, run the tests — with the build (`build-engine.sh --with-synctest --with-visreg [--with-perf]`; same flags on `release-build.sh`, plus `--certify` for replay smoke) or standalone (`scripts/run-synctest.sh`, `scripts/visreg.sh [--perf]`). Shipping artifacts must have passed all of them; skipped stages only warn.
-- Do not respond directly to issues on github unless the user gives explicit consent
-- Issues: https://github.com/qant-au/RecoilEngine-AppleSilicon/issues (the original port's tracker, https://github.com/benbreen/RecoilEngine-AppleSilicon/issues, is unmaintained)
+**How it decides.** Each driver prefix holds a provenance stamp,
+`.driver-provenance`: the Mesa commit, the hash of every patch, the
+SPIRV-LLVM-Translator tag, the driver dependencies, the macOS target, and a
+hash of the script's own commands. The driver is rebuilt when the stamp the
+script would write differs from the one installed. A driver with no stamp is
+kept and reported, never rebuilt silently; `MESA_FORCE_REBUILD=1` rebuilds it.
+A release build refuses an unstamped driver.
+
+**Two prefixes.** `deps/mesa-native` serves `make engine` and the test
+scripts. `deps/mesa-native-release` serves the app targets. Each is built and
+stamped on its own, so a change rebuilds both, each at its next use.
+
+### Changing A Patch
+
+1. Add, edit or remove a file in `patches/mesa/`. Patches are applied with
+   `git apply` in file-name order, so the four-digit prefix is the order.
+   Keep the numbering dense and the names descriptive.
+2. Run `make engine`. The changed patch hash makes the stamp differ, so the
+   driver is rebuilt from a clean checkout of the pin. A patch that does not
+   apply stops the build and names itself.
+3. Run `scripts/gpu-smoke.sh`, then `make app` and `scripts/visreg.sh`
+   (the app build rebuilds the release prefix). For a change that could
+   affect speed, compare frame rates before and after
+   ([PERFORMANCE.md](PERFORMANCE.md)).
+4. Update the Mesa row in [VERSIONS.md](VERSIONS.md) and the patch table in
+   [UPSTREAM.md](UPSTREAM.md).
+
+### Moving The Pin
+
+1. Set `MESA_COMMIT` in `scripts/build-mesa-kk.sh` to the new commit.
+2. Check each patch against it: drop those upstream has taken, port those
+   that no longer apply. `git apply --check` in `deps/mesa-src` tells you
+   which.
+3. Then as above from step 2. Look at every visual-regression picture, not
+   only the pass line: a new driver can change the picture within the limits.
+4. Record in [VERSIONS.md](VERSIONS.md) what was dropped, ported and kept.
+
+The driver build takes its other inputs from pins as well: the Vulkan loader,
+SPIRV-Tools and zstd (`scripts/build-driver-deps.sh`), the translator tag and
+commit in the script itself, libclc (`scripts/build-libclc.sh`) and the Python
+packages for Mesa's code generators (`scripts/mesa-venv-requirements.txt`).
+LLVM 19 comes from Homebrew and is linked statically into the driver.
+
+## The Linux And Windows Check
+
+This layer edits shared files, and a Linux or Windows break does not show in
+a Mac build. Before pushing a change outside `rts/System/Platform/Mac`,
+`packaging/` and `scripts/`, run `scripts/check-nonmac.sh`: it builds this
+tree for Linux and Windows in upstream's build images and runs the unit tests
+on Linux. It prints `NONMAC_OK`.
+
+### Non-Mac Runtime Checklist
+
+The check above builds; it does not run the clients. These changes in shared
+code alter behaviour on Linux and Windows too. Most come from upstream pull
+requests, and no defect is known in any of them, but before a release run a
+Linux client and a Windows client and look at each:
+
+| Change | Where | What To Look At |
+|---|---|---|
+| Fence wait raised from 1 ns to 250 microseconds, with an abort on a failed fence | `rts/Rendering/GL/StreamBuffer.cpp`, `StreamBuffer.h` | a long game with many units: no stall, no abort |
+| Stream buffers orphaned once per frame | `rts/Rendering/GL/StreamBuffer.cpp` | frame rate against the official build |
+| Model uniforms through a persistently mapped ring | `rts/Rendering/ModelsDataUploader.cpp` | units draw with correct transforms and team colours |
+| Info textures uploaded through a re-specified buffer | `rts/Rendering/Map/InfoTexture/Modern/ModernInfoTexture.cpp` | LOS, radar and height overlays |
+| Uniform state restored before shader validation | `rts/Rendering/Shaders/Shader.cpp` | maps with shadows and sky reflections; toggling an info overlay |
+| `--window` precedence over the fullscreen setting | `rts/Rendering/GlobalRendering.cpp` | start with and without `--window` |
+| The loading thread no longer pumps window events | `rts/Game/LoadScreen.cpp` | the window stays responsive while a game loads |
+| Outlines drawn as line primitives | `rts/Game/UI/StartPosSelecter.cpp`, `rts/Rendering/CommandDrawer.cpp` | start boxes, command and selection outlines |
+| S3O textures not decoded in headless builds | `rts/Rendering/Textures/S3OTextureHandler.cpp` | a headless replay; a normal game still textures models |
+| Sound decoded outside the sound mutex | `rts/System/Sound/OpenAL/Sound.cpp` | sound effects in a busy battle |
+| Music restarted after a buffer underrun | `rts/System/Sound/OpenAL/MusicStream.cpp` | music survives a long load |
+| Capture devices ignored in audio hot-plug events | `rts/System/SpringApp.cpp` | plugging a microphone in does not reset sound |
+| Load-side serialisation validation | `rts/System/creg/Serializer.cpp` | save a game and load it |
+| UDP sends never block; one retry on a full send buffer | `rts/System/Net/UDPConnection.cpp` | a multiplayer game on a slow link: no packet-loss warnings in the log |
+
+## Working On The Layer
+
+- **Reproduce first.** Do not start on a bug until there is a way to
+  reproduce it, and do not add a feature without a way to test it.
+- **Fix the cause.** If something works on other platforms and not on macOS,
+  find out why before changing logic for Apple. Upstream will ask the same
+  question.
+- **Check upstream first** for an existing report or fix, and prefer carrying
+  theirs over writing ours.
+- **Test what the change can reach.** Anything drawn: visual regression, with
+  a look at the pictures. Anything in shared code: the Linux and Windows
+  check. Anything near synced code: [DETERMINISM.md](DETERMINISM.md).
+- **One concern per commit**, and a message that says what changed and why.
+- **Keep reports diagnosable.** Every engine log names the package version,
+  the engine version and the game content. When a bug cannot be reproduced,
+  add the log lines that would identify it next time.
+- **Do not move a pin silently.** Every pin is in
+  [VERSIONS.md](VERSIONS.md) with the script that enforces it.
+- **Report bugs noticed along the way**, even when they are not the task.
+
+Issues for this build go to
+[this repository's tracker](https://github.com/qant-au/RecoilEngine-AppleSilicon/issues),
+never to the Recoil or BAR projects.
