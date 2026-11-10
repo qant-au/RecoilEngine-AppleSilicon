@@ -115,9 +115,9 @@ check() {
 
 echo "== consent dialogs (the reported bug: NSAlert sized after being centred) =="
 check "download consent" "$WORK/consent-dialog" --server "repos-cdn.beyondallreason.dev"
-check "online-disabled notice" "$WORK/consent-dialog" --notice "ONLINE PLAY IS DISABLED in this build while I seek approval from the creators of Beyond All Reason to connect to their community servers.
+check "online-disabled notice" "$WORK/consent-dialog" --notice "ONLINE PLAY IS DISABLED in this build. No request to connect to Beyond All Reason's community servers has been made for it yet.
 
-The game opens on a sign-in screen first — press Cancel to reach everything that works offline: skirmish against AI, replays, and local-network (LAN) games."
+The game opens on a sign-in screen first. Press Cancel to reach everything that works offline: skirmish against AI, replays, and local-network (LAN) games."
 
 echo "== the other pre-game windows =="
 check "error dialog" "$WORK/error-dialog" --title "Accurona" \

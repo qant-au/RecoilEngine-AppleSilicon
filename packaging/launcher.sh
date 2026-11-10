@@ -355,13 +355,11 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
       # 2) ONLINE PLAY IS DISABLED notice — LOCAL, shown once per NOTICE_VERSION.
       if [ -f "$RES/.online-play-disabled" ] && \
          [ "$(cat "$NOTICE_ACK" 2>/dev/null)" != "$NOTICE_VERSION" ]; then
-        "$HERE/consent-dialog" --notice "ONLINE PLAY IS DISABLED in this build while I seek approval from the creators of Beyond All Reason to connect to their community servers.
+        "$HERE/consent-dialog" --notice "ONLINE PLAY IS DISABLED in this build. No request to connect to Beyond All Reason's community servers has been made for it yet.
 
-The game opens on a sign-in screen first — press Cancel to reach everything that works offline: skirmish against AI, replays, and local-network (LAN) games.
+The game opens on a sign-in screen first. Press Cancel to reach everything that works offline: skirmish against AI, replays, and local-network (LAN) games.
 
-If you do try to sign in or open an online menu, it will simply fail to reach the server — there is no in-game message explaining why, because online play is blocked outside the game, not inside it.
-
-I hope online play can be enabled very soon." || true
+If you do try to sign in or open an online menu, it will fail to reach the server. There is no in-game message explaining why, because online play is blocked outside the game, not inside it." || true
         echo "$NOTICE_VERSION" > "$NOTICE_ACK"
       fi
       # 3) DISCLAIMER / consent — LOCAL and hardcoded (never network-gated).

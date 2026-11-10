@@ -87,17 +87,6 @@ alert.messageText = "Recoil Engine"
 if let notice = arg("--notice") {
     alert.informativeText = notice
     alert.alertStyle = .informational
-    // right-aligned signature below the message (true bottom-right, not
-    // spaces). NSAlert lays the accessory across its full text column (~500pt
-    // wide for this message), so a full-width right-aligned label sits at the
-    // right edge; .width autoresizing keeps it flush if the alert resizes.
-    let sig = NSTextField(labelWithString: "— Ben")
-    sig.alignment = .right
-    sig.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-    sig.textColor = .secondaryLabelColor
-    sig.frame = NSRect(x: 0, y: 0, width: 500, height: 18)
-    sig.autoresizingMask = [.width]
-    alert.accessoryView = sig
     alert.addButton(withTitle: "OK")
     _ = present(alert)
     exit(0)
@@ -106,10 +95,12 @@ if let notice = arg("--notice") {
 let server = arg("--server") ?? "the BAR content network"
 alert.informativeText =
     "Do you wish to download and run the game Beyond All Reason from \(server)?\n\n" +
-    "Beyond All Reason is third-party content. It is not hosted, vetted, or " +
-    "endorsed by the maintainer of Recoil Engine for macOS, who accepts no " +
-    "responsibility for it or for any damage it may cause. Download and run " +
-    "this game AT YOUR OWN RISK!\n\n" +
+    "This is an unofficial port. It is not affiliated with or endorsed by " +
+    "the Recoil engine team or the Beyond All Reason project.\n\n" +
+    "Beyond All Reason is third-party content, including executable game " +
+    "code that the engine runs. It is not hosted, vetted, or endorsed by " +
+    "this project, which accepts no responsibility for it or for any damage " +
+    "it may cause. Download and run this game AT YOUR OWN RISK!\n\n" +
     "If you continue, future updates for the game may download and run " +
     "automatically."
 alert.alertStyle = .warning
