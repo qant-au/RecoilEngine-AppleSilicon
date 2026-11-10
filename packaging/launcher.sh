@@ -344,9 +344,11 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
     if [ -x "$HERE/updater" ] && [ -s "$RES/update-public-key" ] && [ "${ACCURONA_SKIP_UPDATE:-0}" != "1" ]; then
       UPDATE_FEED="${ACCURONA_UPDATE_FEED:-$(cat "$RES/.update-feed-url" 2>/dev/null)}"
       if [ -n "$UPDATE_FEED" ]; then
+        UPDATE_BASE="$(cat "$RES/.update-download-base" 2>/dev/null)"
         "$HERE/updater" check --feed "$UPDATE_FEED" --key-file "$RES/update-public-key" \
           --app "$(dirname "$CONTENTS")" --current "$PORT_VERSION" \
-          --seen-file "$WRITEDIR/.update-skipped" --wait-pid "$$" --timeout 4
+          --seen-file "$WRITEDIR/.update-skipped" --wait-pid "$$" --timeout 4 \
+          ${UPDATE_BASE:+--download-base "$UPDATE_BASE"}
         [ "$?" = "3" ] && exit 0
       fi
     fi

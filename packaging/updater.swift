@@ -1,4 +1,4 @@
-// updater — the app's own in-app updater, Sparkle-style but small
+// updater: the app's own in-app updater, Sparkle-style but small
 // enough to read in one sitting, with no third-party framework.
 //
 // On launch the launcher asks it to look at a signed feed (a small JSON file
@@ -7,13 +7,22 @@
 // beside the installed app, and swapped in after the launcher has exited, then
 // the new app is opened.
 //
+// What is checked before the player is asked anything:
+//   - the feed's Ed25519 signature against the public key baked into this app
+//     at build time (CryptoKit, so nothing to vendor). The signature covers
+//     the version, the download address, the archive's length and SHA-256,
+//     the date, the minimum system and the notes, so none of them can be
+//     edited, and an old signed archive cannot be offered as a new version;
+//   - the download address is https under the release download base (a feed
+//     read from a local file may also name a local archive).
 // What is checked before anything is replaced:
-//   • the archive's SHA-256 and its Ed25519 signature against the public key
-//     baked into this app at build time (CryptoKit, so nothing to vendor);
-//   • the unpacked bundle has OUR bundle identifier and exactly the version
+//   - the download stops at the length the feed promised, and the archive has
+//     exactly that length and SHA-256;
+//   - the unpacked bundle has OUR bundle identifier and exactly the version
 //     the feed promised;
-//   • `codesign --verify --deep --strict` passes, and when this app is signed
-//     with a Developer ID team, the new one is signed by the same team.
+//   - `codesign --verify --deep --strict` passes, and when this app is signed
+//     with a Developer ID team, the new one is signed by the same team (an
+//     ad-hoc signed bundle is then refused).
 // The signing key, not the download host, is what the updater trusts: a feed
 // or archive that does not verify is ignored and the old app keeps running.
 //
@@ -23,7 +32,8 @@
 // Usage:
 //   updater check --feed <url|file://> --key-file <path> --app <Accurona.app>
 //                 --current <version> --seen-file <path> [--wait-pid <pid>]
-//                 [--timeout <sec>] [--yes] [--no-relaunch]
+//                 [--timeout <sec>] [--download-base <https url>]
+//                 [--yes] [--no-relaunch]
 //       exit 0 = carry on launching, 3 = an update is being installed (quit now)
 //   updater keygen --out <private-key-file>      (prints the public key)
 //   updater sign --key <private-key-file> --archive <zip> --version <v>
@@ -43,15 +53,89 @@ func has(_ n: String) -> Bool { CommandLine.arguments.contains(n) }
 func log(_ s: String) { FileHandle.standardError.write(("updater: " + s + "\n").data(using: .utf8)!) }
 func die(_ s: String) -> Never { log(s); exit(1) }
 
+// Schema 2: the signature covers the feed's fields. Schema 1 signed only the
+// archive, which left every field open to editing, so it is no longer read.
+let feedSchema = 2
 struct Feed: Codable {
     var schema: Int
     var version: String
     var url: String
     var length: Int
     var sha256: String
-    var ed25519: String
+    var date: String
+    var signature: String
     var notes: String?
     var minimumSystemVersion: String?
+}
+
+// The bytes the release key signs: every field the updater acts on or shows,
+// each written as "name:<byte count>:<value>" so no value can run into the
+// next. The archive itself is covered through its SHA-256.
+func signedBytes(_ f: Feed) -> Data {
+    var s = "accurona-update-feed-\(f.schema)\n"
+    for (name, value) in [("version", f.version), ("url", f.url), ("length", String(f.length)),
+                          ("sha256", f.sha256.lowercased()), ("date", f.date),
+                          ("minimumSystemVersion", f.minimumSystemVersion ?? ""), ("notes", f.notes ?? "")] {
+        s += "\(name):\(value.utf8.count):\(value)\n"
+    }
+    return Data(s.utf8)
+}
+
+// Releases are published as GitHub release assets; --download-base names
+// another place for a build that publishes elsewhere.
+let defaultDownloadBase = "https://github.com/qant-au/RecoilEngine-AppleSilicon/releases/download"
+
+// An archive is fetched only over https from under the download base. A feed
+// that was itself read from a local file (a test, or a build pointed at one)
+// may also name a local archive; a feed from the network never may.
+func archiveURLAllowed(_ u: URL, base: String, feedIsLocal: Bool) -> Bool {
+    if u.isFileURL { return feedIsLocal }
+    guard let b = URLComponents(string: base), let c = URLComponents(url: u, resolvingAgainstBaseURL: false),
+          b.scheme?.lowercased() == "https", c.scheme?.lowercased() == "https",
+          let host = c.host?.lowercased(), !host.isEmpty, host == b.host?.lowercased(),
+          c.port == b.port, c.user == nil, c.password == nil else { return false }
+    // compared after percent-decoding, and with no "." or ".." step that could
+    // climb out from under the base once the address is resolved
+    let basePath = b.path.hasSuffix("/") ? b.path : b.path + "/"
+    return c.path.hasPrefix(basePath) && !c.path.split(separator: "/").contains { $0 == "." || $0 == ".." }
+}
+
+// The whole download may take this long; a stalled one ends after a minute.
+let downloadTimeLimit: TimeInterval = 30 * 60
+
+// Receives the archive and stops at the length the signed feed promised.
+final class Download: NSObject, URLSessionDataDelegate {
+    let limit: Int
+    var buf = Data(), done = false, ok = false, tooLong = false, cancelled = false
+    var bar: NSProgressIndicator?
+    var task: URLSessionDataTask?
+    init(limit: Int) { self.limit = limit }
+
+    func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive r: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        ok = (r as? HTTPURLResponse)?.statusCode == 200
+        // a server that announces more than the feed promised is not read at all
+        if r.expectedContentLength > Int64(limit) { ok = false; tooLong = true }
+        completionHandler(ok ? .allow : .cancel)
+    }
+    func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive d: Data) {
+        // whatever comes after the promised length is not the archive
+        if buf.count + d.count > limit { ok = false; tooLong = true; dataTask.cancel(); return }
+        buf.append(d)
+        let frac = Double(buf.count) / Double(max(limit, 1))
+        DispatchQueue.main.async { self.bar?.doubleValue = frac * 100 }
+    }
+    // GitHub answers a release download with a redirect to its file store; a
+    // redirect is followed only while it stays on https.
+    func urlSession(_ s: URLSession, task: URLSessionTask, willPerformHTTPRedirection r: HTTPURLResponse,
+                    newRequest: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(newRequest.url?.scheme?.lowercased() == "https" ? newRequest : nil)
+    }
+    func urlSession(_ s: URLSession, task: URLSessionTask, didCompleteWithError e: Error?) {
+        if e != nil { ok = false }
+        DispatchQueue.main.async { self.done = true; NSApp?.stopModal() }
+    }
+    @objc func cancel(_ sender: Any?) { cancelled = true; task?.cancel() }
 }
 
 // Dotted numeric compare: "0.13.1" < "0.14". Non-numeric parts count as 0.
@@ -128,9 +212,10 @@ if CommandLine.arguments.count > 1 && CommandLine.arguments[1] == "sign" {
           let url = arg("--url"), let out = arg("--out") else { die("sign needs --key --archive --version --url --out") }
     guard let raw = readKey(keyPath), let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: raw) else { die("bad key \(keyPath)") }
     guard let data = FileManager.default.contents(atPath: zip) else { die("cannot read \(zip)") }
-    let sig = try! key.signature(for: data)
-    let feed = Feed(schema: 1, version: ver, url: url, length: data.count, sha256: hex(SHA256.hash(data: data)),
-                    ed25519: sig.base64EncodedString(), notes: arg("--notes"), minimumSystemVersion: arg("--min-system"))
+    var feed = Feed(schema: feedSchema, version: ver, url: url, length: data.count, sha256: hex(SHA256.hash(data: data)),
+                    date: ISO8601DateFormatter().string(from: Date()), signature: "",
+                    notes: arg("--notes"), minimumSystemVersion: arg("--min-system"))
+    feed.signature = try! key.signature(for: signedBytes(feed)).base64EncodedString()
     let enc = JSONEncoder()
     enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     try! enc.encode(feed).write(to: URL(fileURLWithPath: out))
@@ -153,9 +238,22 @@ let seenFile = arg("--seen-file")
 guard let pubRaw = readKey(keyPath), let pub = try? Curve25519.Signing.PublicKey(rawRepresentation: pubRaw) else {
     log("no usable public key at \(keyPath); updates are off in this build"); exit(0)
 }
-guard let feedData = fetch(feedURL, timeout: timeout),
-      let feed = try? JSONDecoder().decode(Feed.self, from: feedData), feed.schema == 1 else {
-    exit(0)  // offline, no feed published yet, or not ours: carry on quietly
+guard let feedData = fetch(feedURL, timeout: timeout) else {
+    exit(0)  // offline or no feed published yet: carry on quietly
+}
+guard let feed = try? JSONDecoder().decode(Feed.self, from: feedData), feed.schema == feedSchema else {
+    log("the update feed is not in a format this version reads; ignored"); exit(0)
+}
+// Nothing in the feed is believed, shown or acted on before this passes.
+guard let feedSig = Data(base64Encoded: feed.signature), pub.isValidSignature(feedSig, for: signedBytes(feed)) else {
+    log("the update feed is not signed by the release key; ignored"); exit(0)
+}
+guard feed.length > 0, ISO8601DateFormatter().date(from: feed.date) != nil else {
+    log("the update feed has an unusable length or date; ignored"); exit(0)
+}
+guard let zipURL = URL(string: feed.url),
+      archiveURLAllowed(zipURL, base: arg("--download-base") ?? defaultDownloadBase, feedIsLocal: feedURL.isFileURL) else {
+    log("the update feed names a download address outside the release site; ignored"); exit(0)
 }
 guard versionLess(current, feed.version) else { exit(0) }
 if let min = feed.minimumSystemVersion {
@@ -235,66 +333,62 @@ if ui {
 }
 
 // ------------------------------------------------------------------- download
-guard let zipURL = URL(string: feed.url) else { failNotice("The update feed gave an unusable address.") }
 var zipData: Data?
+var tooLong = false
 if zipURL.isFileURL {
-    zipData = try? Data(contentsOf: zipURL)
+    // a local archive: one byte past the promised length is enough to see
+    // that the file is longer, without reading the rest of it
+    if let h = try? FileHandle(forReadingFrom: zipURL) {
+        let d = try? h.read(upToCount: feed.length + 1)
+        try? h.close()
+        if let d = d, d.count > feed.length { tooLong = true } else { zipData = d }
+    }
 } else {
     // A small progress panel while the archive downloads; the modal loop keeps
     // the window live, the delegate stops it when the download ends.
-    final class DL: NSObject, URLSessionDataDelegate {
-        var buf = Data(), expected: Int64 = 0, done = false, ok = false
-        var bar: NSProgressIndicator?
-        func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive r: URLResponse,
-                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-            ok = (r as? HTTPURLResponse)?.statusCode == 200
-            expected = r.expectedContentLength
-            completionHandler(ok ? .allow : .cancel)
-        }
-        func urlSession(_ s: URLSession, dataTask: URLSessionDataTask, didReceive d: Data) {
-            buf.append(d)
-            let frac = expected > 0 ? Double(buf.count) / Double(expected) : 0
-            DispatchQueue.main.async { self.bar?.doubleValue = frac * 100 }
-        }
-        func urlSession(_ s: URLSession, task: URLSessionTask, didCompleteWithError e: Error?) {
-            if e != nil { ok = false }
-            DispatchQueue.main.async { self.done = true; NSApp?.stopModal() }
-        }
-    }
-    let dl = DL()
+    let dl = Download(limit: feed.length)
     var panel: NSPanel?
     if ui {
-        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 90), styleMask: [.titled], backing: .buffered, defer: false)
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 128), styleMask: [.titled], backing: .buffered, defer: false)
         p.title = "Updating Accurona"
         let label = NSTextField(labelWithString: "Downloading Accurona \(feed.version)…")
-        label.frame = NSRect(x: 20, y: 52, width: 320, height: 18)
-        let bar = NSProgressIndicator(frame: NSRect(x: 20, y: 24, width: 320, height: 20))
+        label.frame = NSRect(x: 20, y: 90, width: 320, height: 18)
+        let bar = NSProgressIndicator(frame: NSRect(x: 20, y: 62, width: 320, height: 20))
         bar.isIndeterminate = false; bar.minValue = 0; bar.maxValue = 100
-        p.contentView?.addSubview(label); p.contentView?.addSubview(bar)
+        let cancel = NSButton(title: "Cancel", target: dl, action: #selector(Download.cancel(_:)))
+        cancel.frame = NSRect(x: 254, y: 14, width: 92, height: 32)
+        cancel.keyEquivalent = "\u{1b}"   // Escape
+        p.contentView?.addSubview(label); p.contentView?.addSubview(bar); p.contentView?.addSubview(cancel)
         dl.bar = bar
         p.level = .floating
         centerOnActiveScreen(p)
         p.makeKeyAndOrderFront(nil)
         panel = p
     }
-    let session = URLSession(configuration: .ephemeral, delegate: dl, delegateQueue: nil)
-    session.dataTask(with: URLRequest(url: zipURL, timeoutInterval: 60)).resume()
+    let cfg = URLSessionConfiguration.ephemeral
+    cfg.timeoutIntervalForResource = downloadTimeLimit
+    let session = URLSession(configuration: cfg, delegate: dl, delegateQueue: nil)
+    let task = session.dataTask(with: URLRequest(url: zipURL, timeoutInterval: 60))
+    dl.task = task
+    task.resume()
     if let p = panel {
         if !dl.done { NSApp.runModal(for: p) }
         p.orderOut(nil)
     } else {
         while !dl.done { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
     }
+    if dl.cancelled { log("update cancelled by the player"); exit(0) }
+    tooLong = dl.tooLong
     zipData = dl.ok ? dl.buf : nil
 }
+if tooLong { failNotice("The download is larger than the update feed promised, so it was not installed.") }
 guard let data = zipData else { failNotice("The download did not finish. Check the connection and try again next time.") }
 
 // ---------------------------------------------------------------------- verify
+// The feed's signature covers this length and SHA-256, so a match here means
+// the release key vouches for exactly these bytes.
 guard data.count == feed.length, hex(SHA256.hash(data: data)) == feed.sha256.lowercased() else {
     failNotice("The downloaded file does not match the update feed.")
-}
-guard let sig = Data(base64Encoded: feed.ed25519), pub.isValidSignature(sig, for: data) else {
-    failNotice("The download is not signed by Accurona's release key, so it was not installed.")
 }
 
 // Unpack on the app's own volume so the final swap is a rename.
@@ -320,8 +414,17 @@ guard plist(newApp, "CFBundleShortVersionString") == feed.version else {
 }
 let (cv, cout) = run("/usr/bin/codesign", ["--verify", "--deep", "--strict", newApp])
 guard cv == 0 else { failNotice("The update's code signature is broken (\(cout.trimmingCharacters(in: .whitespacesAndNewlines))).") }
-if let team = teamID(appURL.path), teamID(newApp) != team {
-    failNotice("The update is signed by a different developer.")
+// An app signed with a Developer ID team takes updates only from that team.
+// The new bundle must name the same team and satisfy a requirement that its
+// certificate chains to Apple and carries that team, which an ad-hoc signed
+// bundle (no team) or another developer's cannot. An ad-hoc signed app, as a
+// local test build is, has no team to hold an update to.
+if let team = teamID(appURL.path) {
+    guard team.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }), teamID(newApp) == team,
+          run("/usr/bin/codesign", ["--verify", "--deep", "--strict",
+                                    "-R=anchor apple generic and certificate leaf[subject.OU] = \"\(team)\"", newApp]).0 == 0 else {
+        failNotice("The update is signed by a different developer.")
+    }
 }
 
 // ---------------------------------------------------------------------- swap
