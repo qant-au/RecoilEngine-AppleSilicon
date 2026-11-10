@@ -973,11 +973,29 @@ bool CDDSImage::upload_texture2D_decompressed(unsigned int imageIndex, int targe
         default: break;
     }
 
-    std::vector<squish::u8> rgba(image.get_width() * image.get_height() * 4);
-    squish::DecompressImage(rgba.data(), image.get_width(), image.get_height(), static_cast<const unsigned char*>(image), flags);
+    // the header dimensions come straight from the file, so refuse what the
+    // driver would refuse before sizing a buffer from them
+    const size_t width = image.get_width();
+    const size_t height = image.get_height();
+
+    GLint maxSize = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxSize);
+    if (maxSize <= 0)
+        maxSize = 16384;
+
+    if (width == 0 || height == 0 || width > size_t(maxSize) || height > size_t(maxSize))
+        return false;
+
+    // every 4x4 block must be present in the source
+    const size_t blockBytes = (flags == squish::kDxt1) ? 8 : 16;
+    if (image.get_size() < ((width + 3) / 4) * ((height + 3) / 4) * blockBytes)
+        return false;
+
+    std::vector<squish::u8> rgba(width * height * 4);
+    squish::DecompressImage(rgba.data(), int(width), int(height), static_cast<const unsigned char*>(image), flags);
 
     // RGBA8 rows are always 4-byte aligned
-    glTexImage2D(target, 0, GL_RGBA8, image.get_width(), image.get_height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    glTexImage2D(target, 0, GL_RGBA8, GLsizei(width), GLsizei(height), 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
 
     return true;
 }
