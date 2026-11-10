@@ -25,7 +25,7 @@ grab() { # grab <dest-name> <candidate paths...>
 
 brewdir() { brew --prefix "$1" 2>/dev/null || echo "/nonexistent"; }
 
-grab GPL-2.0.txt            "$SRC/COPYING"
+grab GPL-2.0.txt            "$SRC/gpl-2.0.txt"
 # Third-party libraries built from pinned source (scripts/build-static-libs.sh,
 # build-shared-libs.sh) carry their own licence texts in their prefixes.
 STATIC_LIC="$BAR/deps/static/share/licenses"; SHARED_LIC="$BAR/deps/shared/share/licenses"

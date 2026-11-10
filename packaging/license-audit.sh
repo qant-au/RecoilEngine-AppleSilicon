@@ -6,7 +6,8 @@
 #   2. the license text for its component exists under LICENSES/;
 #   3. no LGPL component is statically linked (spot check: the engine binary
 #      must NOT export openal/DevIL symbols — they must resolve via dylibs);
-#   4. COPYING (GPL) and NOTICE are present in the bundle.
+#   4. COPYING and NOTICE are present in the bundle, and COPYING and
+#      LICENSES/GPL-2.0.txt hold the GPL version 2 text itself.
 # Exits non-zero on any violation. Wire into release-build.sh — a bundle
 # that fails this audit must not ship.
 set -euo pipefail
@@ -39,6 +40,14 @@ found=0
 for doc in COPYING NOTICE; do
   if ! find "$BUNDLE" -name "$doc" | grep -q .; then
     echo "VIOLATION: $doc not present in bundle"; fail=1
+  fi
+done
+
+# the GPL text itself must ship, not a file of that name pointing elsewhere
+for gpl in "$BUNDLE/Contents/Resources/COPYING" "$BUNDLE/Contents/Resources/LICENSES/GPL-2.0.txt"; do
+  if [ ! -f "$gpl" ] || [ "$(wc -c < "$gpl")" -lt 15000 ] \
+     || ! grep -q "GNU GENERAL PUBLIC LICENSE" "$gpl" || ! grep -q "Version 2, June 1991" "$gpl"; then
+    echo "VIOLATION: ${gpl#"$BUNDLE"/} is not the GPL version 2 text"; fail=1
   fi
 done
 

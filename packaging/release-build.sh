@@ -743,7 +743,8 @@ done
 
 echo "=== [4/7] license collection + audit"
 mkdir -p "$RESOURCES/LICENSES"
-cp "$SRC/COPYING" "$RESOURCES/"
+# the GPL text itself: the root COPYING is only a pointer ("see LICENSE")
+cp "$SRC/gpl-2.0.txt" "$RESOURCES/COPYING"
 cp "$PKG/NOTICE" "$RESOURCES/"
 cp "$PKG/LICENSES/MANIFEST.tsv" "$RESOURCES/LICENSES/"
 ENGINE_SRC="$SRC" "$PKG/collect-licenses.sh" "$RESOURCES/LICENSES" || { echo "FATAL: license collection failed"; exit 1; }
