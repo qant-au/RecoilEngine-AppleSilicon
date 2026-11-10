@@ -76,6 +76,9 @@ if     (USERDOCS_PLAIN OR userdoc_INSTALL_HTML)
 	userdoc_enlist("COPYING")
 	userdoc_enlist("LICENSE")
 	userdoc_enlist("THANKS")
+	# The macOS layer's LICENSE is the verbatim GPL text, so upstream's license
+	# statement and third-party notices are installed from their own file.
+	list(APPEND userdoc_plain "${CMAKE_SOURCE_DIR}/THIRD-PARTY-NOTICES.md")
 endif  (USERDOCS_PLAIN OR userdoc_INSTALL_HTML)
 
 set(userdoc_INSTALL_PLAIN ${USERDOCS_PLAIN})

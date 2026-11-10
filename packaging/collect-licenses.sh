@@ -41,6 +41,9 @@ section() {
 brewdir() { brew --prefix "$1" 2>/dev/null || echo "/nonexistent"; }
 
 grab GPL-2.0.txt            "$SRC/gpl-2.0.txt"
+# the engine's own license statement and the notices for third-party code in
+# its source tree (SOP.hpp, gflags, mingw-std-threads, ConcurrentQueue)
+grab engine-third-party-notices.txt "$SRC/THIRD-PARTY-NOTICES.md"
 # Third-party libraries built from pinned source (scripts/build-static-libs.sh,
 # build-shared-libs.sh) carry their own licence texts in their prefixes.
 STATIC_LIC="$BAR/deps/static/share/licenses"; SHARED_LIC="$BAR/deps/shared/share/licenses"
