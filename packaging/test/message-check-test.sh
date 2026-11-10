@@ -216,6 +216,14 @@ o=$(san "<a href='smb://host/share'>l</a><a href=\"myapp://do\">m</a>"); { [ "${
 o=$(san '<a href=file:///etc/hosts>l</a>'); [ "${o/file:/}" = "$o" ] && ok "unquoted link value removed" || bad "unquoted href" "$o"
 o=$(san '<a href="http://plain.example">l</a>'); [ "${o/http:/}" = "$o" ] && ok "plain http link removed" || bad "http href" "$o"
 
+echo "== the message file is fetched over https only =="
+# refused before any connection is made, so no listener is needed; a refusal is
+# silent and lets the launch carry on (exit 0)
+for u in "http://127.0.0.1:9/messages.json" "ftp://127.0.0.1/messages.json" "smb://host/share/messages.json"; do
+  out=$("$BIN" --config-url "$u" --app-version 1.0 --seen-file "$WORK/scheme-seen" --timeout 2 --dry-run 2>/dev/null); rc=$?
+  { [ "$rc" = 0 ] && [ -z "$out" ]; } && ok "${u%%:*} message file ignored, launch carries on" || bad "${u%%:*} config" "exit $rc: $out"
+done
+
 echo
 echo "RESULT: $pass passed, $fail failed"
 [ "$fail" = 0 ]
