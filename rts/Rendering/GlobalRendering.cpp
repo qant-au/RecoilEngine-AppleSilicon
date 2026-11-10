@@ -1318,8 +1318,12 @@ void CGlobalRendering::SetGLSupportFlags()
 	//supportFragDepthLayout = ((globalRenderingInfo.glContextVersion.x * 10 + globalRenderingInfo.glContextVersion.y) >= 42);
 	supportFragDepthLayout = GLAD_GL_ARB_conservative_depth; //stick to the theory that reported = exist
 
-	// the one place where "reported = exist" does NOT hold, so measure it
-	supportGeometryShaderStage = ProbeGeometryShaderStage();
+	// the one place where "reported = exist" does NOT hold, so measure it. Only
+	// on the driver stack where the stage is known to be dead (zink): anywhere
+	// else a probe that fails for another reason would switch off geometry
+	// shaders that work, so other drivers are taken at their word
+	const bool probeGeometryStage = (glRenderer.find("zink") != std::string::npos);
+	supportGeometryShaderStage = !probeGeometryStage || ProbeGeometryShaderStage();
 
 	if (!supportGeometryShaderStage) {
 		LOG_L(L_WARNING,
