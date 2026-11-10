@@ -13,7 +13,8 @@
 # sdl2 is a real SDL2). Called by build-engine.sh.
 set -euo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
+case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 DEPS="$BAR/deps"
 SDL2_VER="2.32.10"
 # sha256 of the release tarball, from the digest GitHub publishes for the
@@ -27,7 +28,12 @@ TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 # not depend on what a bottle happens to be.
 # Reuse a previous build only if it was built for the current deployment target;
 # otherwise the bundle would carry an SDL with a different minos than the engine.
+# The stamp names the version, the tarball checksum and the target, so a bump
+# of SDL2_VER rebuilds it (the library file name does not change with it).
+STAMP="$PREFIX/.provenance"
+WANT="sdl2=$SDL2_VER sha256=$SDL2_SHA256 macos_target=$TARGET"
 if [ -f "$LIB" ] && [ -f "$PREFIX/lib/cmake/SDL2/SDL2Config.cmake" ] \
+   && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT" ] \
    && [ "$(vtool -show-build "$LIB" 2>/dev/null | awk '/minos/{print $2; exit}')" = "$TARGET" ]; then
   echo "$PREFIX"; exit 0
 fi
@@ -42,7 +48,7 @@ fi
       || { echo "FATAL: SDL2-$SDL2_VER.tar.gz checksum mismatch" >&2; rm -f "$DEPS/SDL2-$SDL2_VER.tar.gz"; exit 1; }
     tar -xzf "$DEPS/SDL2-$SDL2_VER.tar.gz" -C "$DEPS"
   fi
-  rm -rf "$SRCDIR/build"
+  rm -rf "$SRCDIR/build" "$PREFIX"   # replace, never overlay an older version
   # prefix maps: keep the builder's path out of SDL's __FILE__ strings
   # (release-build.sh's builder-path audit, LESSON-41)
   PREFIX_MAP="-ffile-prefix-map=$BAR=. -fdebug-prefix-map=$BAR=."
@@ -57,6 +63,7 @@ fi
   # deps via /opt/homebrew/lib, which would pick the sdl2-compat shim again.
   # An absolute id makes the bundler copy THIS dylib (and re-id it to @rpath).
   install_name_tool -id "$LIB" "$LIB"
+  printf '%s\n' "$WANT" > "$STAMP"
 } >&2
 
 test -f "$LIB" || { echo "FATAL: SDL2 build did not produce $LIB" >&2; exit 1; }

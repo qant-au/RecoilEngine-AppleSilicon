@@ -22,7 +22,7 @@
 # VISREG_MAX_BAD_PCT percent (default 1.0) differ by over 40. A limits.txt beside
 # the baselines overrides both per picture (06 is looser: nano spray, water).
 set -uo pipefail
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 # The engine comes from a BUILT APP BUNDLE (default: the last 'make app'),
 # with exactly the driver environment the launcher uses. The build-engine/
 # binary cannot load the bundled Vulkan loader (@rpath only resolves in the

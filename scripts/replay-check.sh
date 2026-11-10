@@ -42,7 +42,7 @@
 # https://github.com/beyond-all-reason/RecoilEngine/releases is the control.
 set -uo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 DEMO=""; ENGINE="${ENGINE_BUILD:-$BAR/build-engine}/spring-headless"
 CONTENT="$HOME/Library/Application Support/Beyond-All-Reason-mac"
 TIMEOUT=7200; LOG=""; SPEED=20

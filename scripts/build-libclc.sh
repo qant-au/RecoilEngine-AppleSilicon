@@ -13,7 +13,8 @@
 # Homebrew's libclc is usable as-is). Called by build-mesa-kk.sh.
 set -euo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
+case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 DEPS="$BAR/deps"
 LIBCLC_VER="19.1.7"
 # sha256 of the release asset libclc-19.1.7.src.tar.xz (llvm/llvm-project, llvmorg-19.1.7)

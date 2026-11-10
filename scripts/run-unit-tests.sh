@@ -14,7 +14,7 @@
 set -uo pipefail
 MIN_TESTS=30
 CREG_UPSTREAM_GAP='between drawSorted & blockPreciseCol'
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 cd "$BAR"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 MESA_PREFIX="${MESA_PREFIX:-$BAR/deps/mesa-native}"

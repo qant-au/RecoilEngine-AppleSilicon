@@ -28,7 +28,8 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
 # Swift helper gets the target explicitly.
 SWIFT_TARGET="arm64-apple-macos$MACOSX_DEPLOYMENT_TARGET"
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
+case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 PKG="$BAR/packaging"
 # The shipped pair lives in ONE place, shared with scripts/visreg.sh so the
 # release gate and an interactive visreg run cannot drift apart. Bump it there.
@@ -936,18 +937,23 @@ rm -f "$RWDMG"
 hdiutil create -volname "$VOLNAME" -srcfolder "$DMGROOT" -fs HFS+ \
   -format UDRW -ov "$RWDMG" >/dev/null
 rm -rf "$DMGROOT"
-MOUNTPT="/Volumes/$VOLNAME"
-hdiutil detach "$MOUNTPT" >/dev/null 2>&1 || true
+# A private mount point: /Volumes/<name> could be an installer the user has
+# open, which this build must neither eject nor write into. The trap detaches
+# the image if anything below fails.
+MOUNTPT=$(mktemp -d)
+dmg_cleanup() { hdiutil detach "$MOUNTPT" >/dev/null 2>&1 || true; rmdir "$MOUNTPT" 2>/dev/null || true; rm -f "$RWDMG"; }
+trap dmg_cleanup EXIT
 hdiutil attach "$RWDMG" -mountpoint "$MOUNTPT" -nobrowse >/dev/null
 SetFile -a C "$MOUNTPT" 2>/dev/null || true   # honor .VolumeIcon.icns
 # Write the styling .DS_Store (icon view, background picture, icon positions
 # on the arrow endpoints) directly — headless, no Finder/Automation needed.
 python3 "$PKG/dmg-layout.py" "$MOUNTPT" "$(basename "$APP")" \
-  || { echo "FATAL: dmg layout failed"; hdiutil detach "$MOUNTPT" >/dev/null; exit 1; }
+  || { echo "FATAL: dmg layout failed"; exit 1; }
 sync
 hdiutil detach "$MOUNTPT" >/dev/null
 hdiutil convert "$RWDMG" -format UDZO -imagekey zlib-level=9 -o "$DMG" >/dev/null
-rm -f "$RWDMG"
+dmg_cleanup
+trap - EXIT
 if [ "$IDENTITY" != "-" ]; then
   codesign --force --timestamp -s "$IDENTITY" "$DMG"
   if [ "${#NOTARY_AUTH[@]}" -gt 0 ]; then

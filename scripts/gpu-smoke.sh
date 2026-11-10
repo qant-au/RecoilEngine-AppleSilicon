@@ -6,7 +6,7 @@
 #
 # Usage: scripts/gpu-smoke.sh        (MESA_PREFIX overrides deps/mesa-native)
 set -uo pipefail
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 MESA_PREFIX="${MESA_PREFIX:-$BAR/deps/mesa-native}"
 DRIVER_DEPS="${DRIVER_DEPS:-$BAR/deps/driver-deps}"
 OUT="$BAR/build-gpu-smoke"; mkdir -p "$OUT"

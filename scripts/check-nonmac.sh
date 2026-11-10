@@ -13,7 +13,7 @@
 # Usage: scripts/check-nonmac.sh [linux|windows|all]   (default all)
 set -uo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 cd "$BAR"
 WHAT="${1:-all}"
 BASH5=$(command -v /opt/homebrew/bin/bash || command -v bash)

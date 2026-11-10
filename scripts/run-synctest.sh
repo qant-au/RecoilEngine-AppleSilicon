@@ -13,7 +13,7 @@
 # Prints SYNCTEST_OK on success.
 set -euo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 SRC="${ENGINE_SRC:-$BAR}"
 BUILD="$BAR/build-synctest"
 N=10000

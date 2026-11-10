@@ -21,7 +21,8 @@
 # Everything is checked with explicit artifact tests, not exit codes.
 set -euo pipefail
 
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
+case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 # Deployment target: the floor the shipped bundle declares (LSMinimumSystemVersion,
 # packaging/release-build.sh). macOS 27.0 since 2026-11-08 (was 26.0, KosmicKrisp
 # needs Metal 4). Without it clang defaults to the BUILD host's OS, so the floor
@@ -47,6 +48,9 @@ want_stamp() {
   echo "spirv_xlat=$SPIRV_XLAT_TAG"
   echo "driver_deps=$(cat "$DEPS/driver-deps/.provenance" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
   echo "macos_target=$MACOSX_DEPLOYMENT_TARGET"
+  # the build recipe itself (meson options, link steps): this script without
+  # its comment and blank lines, so a comment edit does not rebuild the driver
+  echo "recipe=$(grep -v -E '^[[:space:]]*(#|$)' "$0" | shasum -a 256 | cut -d' ' -f1)"
   local p
   for p in $(patch_list); do
     echo "patch=$(basename "$p"):$(shasum -a 256 "$p" | cut -d' ' -f1)"
@@ -121,7 +125,7 @@ echo "spirv-xlat OK"
 CLC_PC="$("$BAR/scripts/build-libclc.sh")"
 [ -n "$CLC_PC" ] && echo "libclc: $CLC_PC" || echo "libclc: Homebrew"
 
-echo "=== [3/4] Mesa 26.2-devel (zink + kosmickrisp) @ $MESA_COMMIT + $NPATCH patches ==="
+echo "=== [3/4] Mesa (zink + kosmickrisp) @ $MESA_COMMIT + $NPATCH patches ==="
 if [ ! -d "$MESA_SRC/.git" ]; then
   git clone https://gitlab.freedesktop.org/mesa/mesa.git "$MESA_SRC"
 fi
