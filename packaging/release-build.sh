@@ -17,6 +17,9 @@
 #                              [--version <tag>] [--profile bar|engine]
 #                              [--with-synctest] [--with-visreg] [--certify]
 #                              [--with-dsym]
+# Release settings (--port-version, --notary-key ..., --messages-config,
+# --update-feed, --allow-release-overrides): see the option parser below and
+# docs/RELEASING.md.
 #                              [--enable-online | --disable-online]
 # Without --identity the bundle is ad-hoc signed (local testing only; will
 # not pass Gatekeeper on other machines). Notarization runs only when both

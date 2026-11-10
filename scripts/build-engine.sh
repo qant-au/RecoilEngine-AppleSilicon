@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the Recoil engine (BAR macOS layer) against the local Mesa KosmicKrisp stack.
-# Mirrors ExaDev macos-build-gpu.yml.
+# Build the Recoil engine with the macOS layer against the local Mesa
+# KosmicKrisp stack. Targets, tests and variables: docs/BUILDING.md.
 #
 # Usage: build-engine.sh [--with-synctest] [--with-visreg]
 #

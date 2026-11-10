@@ -1,6 +1,6 @@
 name: "Feedback / idea"
 description: "Not a bug — a suggestion, question, or general feedback about the macOS port."
-labels: ["feedback"]
+labels: ["enhancement"]
 body:
   - type: textarea
     id: feedback

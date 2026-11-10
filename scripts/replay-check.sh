@@ -22,9 +22,9 @@
 # prints REPLAY_SYNC_FAIL <reason> and exits 1 otherwise. A demo recorded on a
 # different engine version is refused (VERSION_MISMATCH): it cannot replay.
 #
-# Fetching a public BAR replay: https://api.bar-rts.com/replays?engine=<version>
-# lists them (use the id for .../replays/<id>, whose fileName is downloadable from
-# https://storage.uk.cloud.ovh.net/v1/AUTH_10286efc0d334efd917d476d7183232e/BAR/demos/).
+# Fetching a public BAR replay: scripts/find-fleet-replays.py <engine version>
+# lists replays recorded on that engine, with a download address for each (the
+# replay API cannot filter by engine, so the script reads each record).
 # Its gameVersion must be present in --content (pr-downloader --download-game) and
 # its map too (--download-map). Point pr-downloader at BAR's content network, or
 # it falls back to the old springrts repositories and finds nothing:
