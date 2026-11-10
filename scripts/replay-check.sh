@@ -17,7 +17,8 @@
 #                      a 36 min 8v8 took 7 min at 20x on an M3 Ultra (CPU-bound).
 #   --timeout <secs>   wall-clock limit (default 7200).
 #   --log <file>       where to keep the engine log (default: a temp file)
-# Prints REPLAY_SYNC_OK and exits 0 on a clean run to the end of the demo;
+# Prints REPLAY_SYNC_OK and exits 0 on a clean run past the demo's last recorded
+# checksum (a demo with no checksums is refused);
 # prints REPLAY_SYNC_FAIL <reason> and exits 1 otherwise. A demo recorded on a
 # different engine version is refused (VERSION_MISMATCH): it cannot replay.
 #
@@ -70,6 +71,13 @@ if [ -z "$DEMO_VER" ] || [ "$DEMO_VER" != "$BIN_VER" ]; then
   echo "REPLAY_SYNC_FAIL VERSION_MISMATCH: demo=${DEMO_VER:-unknown} binary=${BIN_VER:-unknown}"; exit 1
 fi
 
+# Positive evidence: the engine is silent when checksums match, so a demo that
+# carries none would pass whatever the simulation did.
+read -r SYNC_PACKETS SYNC_LAST_FRAME < <(python3 "$(dirname "$0")/demo-sync-packets.py" "$DEMO" 2>/dev/null)
+if [ "${SYNC_PACKETS:-0}" -lt 1 ]; then
+  echo "REPLAY_SYNC_FAIL the demo carries no sync checksums, so a replay of it proves nothing"; exit 1
+fi
+
 # Isolated write dir, so a replay never touches the launcher's settings.
 WD=$(mktemp -d "${TMPDIR:-/tmp}/replay-check.XXXXXX")
 [ -n "$LOG" ] || LOG="$WD/replay.log"
@@ -102,4 +110,8 @@ if [ "$RC" -ne 0 ]; then
   echo "REPLAY_SYNC_FAIL engine exit $RC after ${SECS}s at frame ${LAST_FRAME:-?} (124 = timeout) - see $LOG"
   exit 1
 fi
-echo "REPLAY_SYNC_OK game_end_frame=${END_FRAME:-?} last_frame=${LAST_FRAME:-?} desyncs=0 speed=${SPEED}x wall=${SECS}s log=$LOG"
+if [ "${LAST_FRAME:-0}" -lt "$SYNC_LAST_FRAME" ]; then
+  echo "REPLAY_SYNC_FAIL playback stopped at frame ${LAST_FRAME:-?}, before the demo's last checksum at frame $SYNC_LAST_FRAME - see $LOG"
+  exit 1
+fi
+echo "REPLAY_SYNC_OK game_end_frame=${END_FRAME:-?} last_frame=${LAST_FRAME:-?} desyncs=0 checksums=$SYNC_PACKETS speed=${SPEED}x wall=${SECS}s log=$LOG"

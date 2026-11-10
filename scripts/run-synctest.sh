@@ -17,6 +17,9 @@ BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
 SRC="${ENGINE_SRC:-$BAR}"
 BUILD="$BAR/build-synctest"
 N=10000
+# fewest tests that must be compared against each reference (47,852 and 52,080
+# at the default N); set SYNCTEST_MIN_COMMON when running with a smaller -n
+MIN_COMMON="${SYNCTEST_MIN_COMMON:-40000}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --build-dir) BUILD=$2; shift 2;;
@@ -38,5 +41,8 @@ for ref in streflop_results_SSE_x86_64 streflop_results_NEON_arm64; do
   common=$(echo "$out" | grep -E 'Common tests:' | awk '{print $3}')
   echo "vs $ref: $verdict (common tests: ${common:-?})"
   echo "$verdict" | grep -q 'BIT-EXACT MATCH' || { echo "$out" | tail -20; FAIL=1; }
+  # the comparison prints BIT-EXACT for zero tests in common, so require a floor
+  common_n=$(printf '%s' "${common:-0}" | tr -dc '0-9')
+  [ "${common_n:-0}" -ge "$MIN_COMMON" ] || { echo "only ${common:-0} tests in common with $ref (need $MIN_COMMON)"; FAIL=1; }
 done
 [ "$FAIL" = 0 ] && echo "SYNCTEST_OK" || { echo "SYNCTEST_FAIL"; exit 1; }
