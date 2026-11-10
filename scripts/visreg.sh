@@ -19,8 +19,18 @@
 # Unsynced animation (water, sky) still moves a little between runs, hence a
 # tolerance rather than an exact match: a shot fails when its mean per-channel
 # difference exceeds VISREG_MAX_MEAN (default 2.0 of 255) or more than
-# VISREG_MAX_BAD_PCT percent (default 1.0) differ by over 40. A limits.txt beside
-# the baselines overrides both per picture (06 is looser: nano spray, water).
+# VISREG_MAX_BAD_PCT percent (default 1.0) differ by over 40 in any channel. A
+# limits.txt beside the baselines overrides both per picture (06 is looser:
+# nano spray, water). Those two limits average a small wrong region away, so a
+# shot also fails when over 60 percent of any 64 px window differs by over 40
+# (scripts/visreg/compare.py; a run-to-run snow puff reaches about 40 percent).
+#
+# The baselines belong to one exact demo: --bless records its sha256 in
+# demo.sha256 beside them, and a run with a different file stops before playing.
+#
+# Needs python3 with the Pillow package for the comparison:
+#   python3 -m pip install -r scripts/visreg/requirements.txt
+# The comparison has a self-test: python3 scripts/visreg/selftest.py
 set -uo pipefail
 BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 # The engine comes from a BUILT APP BUNDLE (default: the last 'make app'),
@@ -50,6 +60,21 @@ TIMEOUT_BIN=$(command -v timeout || command -v gtimeout) || { echo "VISREG_FAIL 
 ENGINE_VER=$("$C/MacOS/spring" --version 2>/dev/null | grep -oE '20[0-9]{2}\.[0-9]{2}\.[0-9]{2}' | head -1)
 NAME=$(basename "$DEMO" .sdfz)
 BASE="$BAR/testkit/visreg/$ENGINE_VER/$NAME"
+DEMO_SHA=$(shasum -a 256 "$DEMO" | awk '{print $1}')
+[ -n "$DEMO_SHA" ] || { echo "VISREG_FAIL cannot hash the demo (shasum -a 256 $DEMO)"; exit 1; }
+SHA_FILE="$BASE/demo.sha256"
+# Checks for a run that will be compared, made before the two-minute replay.
+if [ "$BLESS" != "1" ] && [ -d "$BASE" ]; then
+  python3 -c 'import PIL' 2>/dev/null || { echo "VISREG_FAIL the comparison needs the Pillow package: python3 -m pip install -r scripts/visreg/requirements.txt"; exit 1; }
+  if [ -f "$SHA_FILE" ]; then
+    # A different demo under the same name would be judged against pictures
+    # of another game.
+    WANT_SHA=$(awk '!/^#/ && NF {print $1; exit}' "$SHA_FILE")
+    [ "$DEMO_SHA" = "$WANT_SHA" ] || { echo "VISREG_FAIL demo is not the one the baselines were made from: $DEMO has sha256 $DEMO_SHA, $SHA_FILE records $WANT_SHA"; exit 1; }
+  else
+    echo "note: no demo.sha256 beside the baselines in $BASE, so the demo is not checked (--bless writes it)"
+  fi
+fi
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="$BAR/logs/local/visreg-$STAMP"; mkdir -p "$OUT"
 
@@ -111,6 +136,8 @@ fi
 
 if [ "$BLESS" = "1" ]; then
   mkdir -p "$BASE"; cp "$OUT"/[0-9]*.png "$BASE/"
+  # shasum's own format, so 'shasum -a 256 -c' beside the demo checks it too
+  printf '%s  %s\n' "$DEMO_SHA" "$(basename "$DEMO")" > "$SHA_FILE"
   echo "VISREG_BLESSED $GOT baselines -> $BASE"; exit 0
 fi
 if [ ! -d "$BASE" ]; then
