@@ -182,4 +182,6 @@ compile_commands.json
 # macOS port: local build dependencies and packaged app output
 /deps
 /release-artifacts
+# logs written by the test scripts: they hold absolute paths and a user name
+/logs/local/
 /.i-understand-git-submodules.txt

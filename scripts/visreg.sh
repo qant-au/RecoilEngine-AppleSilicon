@@ -9,7 +9,7 @@
 #   --content  data dir with the game, map and lobby packages (default: the
 #              launcher's write dir; read only, the run uses its own write dir)
 #   --bless    after a run, copy the pictures into testkit/visreg as the new
-#              baselines. Only after Adam has looked at them and approved.
+#              baselines. Only after a person has looked at them and approved.
 #   --perf     accepted for release-build.sh compatibility (no perf gate yet)
 # Opens a game window for about two minutes. Prints VISREG_OK, VISREG_FAIL or
 # VISREG_NO_BASELINE (pictures kept under logs/local/visreg-<stamp>/ to review).

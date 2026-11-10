@@ -40,7 +40,7 @@ BUILD_HINT="${ENGINE_BUILD:-$SHIP_ENGINE_BUILD}"
 # tree on 2026-08-07 when the 2026.07.04 lane was consolidated into engine/. With
 # ship-config pointing BUILD at build-engine-2026.07.04, a bare release build
 # would have reconfigured that dir onto the OLD source and packaged 2025.06.24
-# code as v0.13. build-engine.sh's source-tree guard refused it (LESSON-59) —
+# code as v0.13. build-engine.sh's source-tree guard refused it —
 # this is the fifth script found pinning a path instead of following its input,
 # and the first where the consequence would have been a mislabelled RELEASE.
 if [ -z "${ENGINE_SRC:-}" ] && [ -f "$BUILD_HINT/CMakeCache.txt" ]; then
@@ -97,7 +97,7 @@ PROFILE=bar
 #
 # --enable-online (or BAR_ONLINE=1) is a DELIBERATE opt-in and must not be used
 # for a public artifact without an explicit decision to seek approval from BAR's
-# maintainers first; see docs/OUTSTANDING.md on the online-play posture.
+# maintainers first; see "Online play" in README.md.
 ENABLE_ONLINE="${BAR_ONLINE:-0}"
 # Message config source (bar profile): where the shipped launcher fetches
 # messages.json each launch. Default = the port's GitHub repo. Override with
@@ -105,7 +105,7 @@ ENABLE_ONLINE="${BAR_ONLINE:-0}"
 # baked as a file:// URL — for testing builds against an unpublished config).
 DEFAULT_MESSAGES_CONFIG="https://raw.githubusercontent.com/qant-au/RecoilEngine-AppleSilicon/main/message-config/messages.json"
 MESSAGES_CONFIG="${BAR_MESSAGES_CONFIG:-$DEFAULT_MESSAGES_CONFIG}"
-# In-app updater (acu-030, packaging/updater.swift). The app checks UPDATE_FEED
+# In-app updater (packaging/updater.swift). The app checks UPDATE_FEED
 # each launch; the release key's PUBLIC half (packaging/update-public-key) is
 # baked in, and when the PRIVATE half is on this machine the build also writes
 # a signed appcast.json beside the zip. Publish both with the release: the
@@ -365,7 +365,7 @@ cp -R "$SRC/cont/fonts" "$RESOURCES/fonts"
 # left the moment anything is selected — visible to players in the gap between
 # BAR's minimap and its grid build menu. Every release up to and including the
 # v0.13 RC shipped without it; official Windows/Linux installs ship it loose,
-# which is why the box is macOS-only. See DEVLOG 2026-08-08.
+# which is why the box is macOS-only.
 # Only this one file, NOT all of cont/LuaUI: with devmode on, LuaUI.cpp loads at
 # SPRING_VFS_RAW_FIRST, so a loose main.lua would shadow BAR's own UI.
 mkdir -p "$RESOURCES/LuaUI"
@@ -649,7 +649,7 @@ echo "deployment-target audit: every bundled Mach-O loads on macOS $MACOSX_DEPLO
 # path of the .o/.a it came from — 875 of them in `spring` alone, i.e. the
 # builder's home directory, inside a notarized artifact. v0.12 shipped exactly
 # that. `strings` does NOT reveal them (it reads only __TEXT), which is why the
-# LESSON-41 scan, which caught Mesa's drirc strings, missed this whole class.
+# earlier strings-based scan, which caught Mesa's drirc strings, missed this whole class.
 # -S drops the debug (STABS) entries only and keeps the regular symbol table,
 # so crash backtraces still resolve function names. Must run before codesign:
 # stripping a signed Mach-O invalidates its signature.
@@ -665,7 +665,7 @@ echo "debug symbol tables stripped from ${#ALL_MACHO[@]} bundled Mach-O files"
 # Builder-path audit. Scan the ARTIFACT and hard-fail: whatever reaches
 # this point is about to be signed, notarized and published, and publishing
 # cannot be undone. Uses a raw byte grep, NOT `strings` — `strings` reads only
-# the text section by default and silently misses debug-map paths (LESSON-41).
+# the text section by default and silently misses debug-map paths.
 # /Users/ alone misses a checkout anywhere else (/Volumes, /private/tmp, a CI
 # runner), so the roots this build actually used are searched for as well.
 LEAK_RE='/Users/'
@@ -686,7 +686,7 @@ while IFS= read -r m; do
 done <<EOF
 $(find "$APP" -type f 2>/dev/null)
 EOF
-[ "$PATHLEAK_FAIL" = "0" ] || { echo "FATAL: refusing to package an artifact containing builder paths — see LESSON-41"; exit 1; }
+[ "$PATHLEAK_FAIL" = "0" ] || { echo "FATAL: refusing to package an artifact containing builder paths"; exit 1; }
 echo "builder-path audit: no /Users/ path and none of this build's own folders anywhere in the bundle"
 
 # Info.plist — version string clearly identifies the mac port build
@@ -789,7 +789,7 @@ done
 [ "$_loose_missing" = "0" ] || {
   echo "FATAL: a required loose file is missing from the bundle's Resources."
   echo "       These cannot come from an archive; the engine reads them off the"
-  echo "       datadir or silently does without. See DEVLOG 2026-08-08 (later)."
+  echo "       datadir or silently does without."
   exit 1; }
 
 echo "=== [4/7] license collection + audit"
@@ -828,7 +828,7 @@ codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" -s
 
 # HARD GATE: a release artifact must never carry get-task-allow
 if codesign -d --entitlements - --xml "$APP/Contents/MacOS/spring" 2>/dev/null | grep -q "get-task-allow"; then
-  echo "FATAL: get-task-allow present in release artifact (sign-for-profiling leaked in?)"
+  echo "FATAL: get-task-allow present in release artifact (a debugging entitlement leaked in?)"
   exit 1
 fi
 codesign --verify --deep --strict "$APP"
@@ -1004,5 +1004,5 @@ if [ "$IDENTITY" != "-" ] && [ "$CERTIFIED" != "1" ]; then
   echo "!!  with --certify) on an Apple Silicon Mac before distributing."
 elif [ "$CERTIFIED" != "1" ]; then
   echo "REMINDER: full certification (graphics soak + full-length REPLAY_SYNC_OK)"
-  echo "must pass before this artifact is uploaded anywhere (plan §10) — 'make certify'."
+  echo "must pass before this artifact is uploaded anywhere: 'make certify'."
 fi

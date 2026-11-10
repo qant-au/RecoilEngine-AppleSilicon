@@ -4,7 +4,7 @@
 # Wraps pr-downloader against the OFFICIAL BAR content network (the same CDN
 # the official launcher uses — endpoints from BYAR-Chobby dist_cfg): rapid
 # game archives + Chobby lobby + engine maps into the user's write dir.
-# Design per release plan §5:
+# Design:
 #   - never writes inside the signed .app bundle;
 #   - disk-space preflight (content is ~2-3 GB, checked before starting);
 #   - resume/retry: pr-downloader's rapid pool is content-addressed, so a

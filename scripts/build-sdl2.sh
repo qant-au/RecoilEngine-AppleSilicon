@@ -50,7 +50,7 @@ fi
   fi
   rm -rf "$SRCDIR/build" "$PREFIX"   # replace, never overlay an older version
   # prefix maps: keep the builder's path out of SDL's __FILE__ strings
-  # (release-build.sh's builder-path audit, LESSON-41)
+  # (release-build.sh's builder-path audit)
   PREFIX_MAP="-ffile-prefix-map=$BAR=. -fdebug-prefix-map=$BAR=."
   cmake -S "$SRCDIR" -B "$SRCDIR/build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \

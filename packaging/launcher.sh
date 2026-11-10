@@ -126,8 +126,8 @@ fi
 # Sim/draw balance: the engine defaults (MinDrawFPS=2, MinSimDrawBalance=0.15)
 # let rendering starve to 2 fps during sim catch-up bursts, which players see
 # as ~1s "freezes"/pause-flicker in big battles on Apple-class sim times
-# (issue #5). Tuned values eliminated all >100ms battle-window draw gaps in an
-# interleaved n=4 A/B (DEVLOG 2026-07-21) at the cost of slightly slower sim
+# Tuned values eliminated all >100ms battle-window draw gaps in an
+# interleaved n=4 A/B at the cost of slightly slower sim
 # catch-up. Seeded only when absent so user choices always win.
 if ! grep -q "^MinDrawFPS " "$CFG" 2>/dev/null; then
   echo "MinDrawFPS = 10" >> "$CFG"
@@ -170,10 +170,10 @@ fi
 # only, that branch writes: water 0, Shadows 0, ShadowMapSize 1024, MSAALevel 0 --
 # i.e. it permanently disables water and shadows on an M2 Ultra.
 #
-# We cannot fix the detection: game content is reference-only (PORTING_PRINCIPLES
-# §0) and ships from BAR's CDN, so there is nothing local to patch. The proper fix
-# is an Apple/Metal branch upstream -- see docs/OUTSTANDING.md; this is the
-# interim, port-side mitigation.
+# We cannot fix the detection: game content is not ours to change and ships
+# from BAR's CDN, so there is nothing local to patch. The proper fix is an
+# Apple/Metal branch in the game's own detection; this is the interim,
+# port-side mitigation.
 #
 # Mechanism: that whole block is gated on `firstlaunchsetupDone`, which BAR
 # persists as `firsttimesetupDone` in its LuaUI config. Seeding that marker makes
@@ -315,7 +315,7 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
   fi
 
   if [ "${BAR_ASSUME_CONSENT:-0}" != "1" ]; then
-    # 0) IN-APP UPDATE (acu-030). The updater reads a signed feed published
+    # 0) IN-APP UPDATE. The updater reads a signed feed published
     #    with each release; when it names a newer app and the player accepts,
     #    it downloads, verifies (Ed25519 release key baked into this build,
     #    bundle id, version, code signature) and swaps the app once this
@@ -341,7 +341,7 @@ if [ "${BAR_SKIP_CONTENT_CHECK:-0}" != "1" ]; then
         --app-version "$PORT_VERSION" --seen-file "$MESSAGE_SEEN" --timeout 4
       [ "$?" = "2" ] && exit 0
     fi
-    # 1b) ENGINE NUDGE (oth-030). Windows/Linux launchers download a new engine
+    # 1b) ENGINE NUDGE. Windows/Linux launchers download a new engine
     #     when BAR production moves; this app carries its engine, so players
     #     need a new app instead. Read the production engine from BYAR-Chobby's
     #     dist_cfg (the same file the official launcher uses) and, when it is
@@ -450,7 +450,7 @@ I hope online play can be enabled very soon." || true
   restore_rapid() {
     # A backup under the old name comes from an earlier version of this app that
     # was force-quit mid-update. That version restored it unconditionally, so do
-    # the same rather than refusing to start (Adam, 2026-11-09); anything that is
+    # the same rather than refusing to start; anything that is
     # not a plain directory is simply discarded.
     if [ -e "$RAPID_LEGACY" ] || [ -L "$RAPID_LEGACY" ]; then
       if [ -d "$RAPID_LEGACY" ] && [ ! -L "$RAPID_LEGACY" ]; then

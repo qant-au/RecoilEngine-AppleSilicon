@@ -1,5 +1,5 @@
 #!/bin/bash
-# In-app updater (packaging/updater.swift, acu-030), end to end with no window
+# In-app updater (packaging/updater.swift), end to end with no window
 # (--yes): build two tiny ad-hoc-signed app bundles, sign v2's zip with a fresh
 # key, point a file:// feed at it, and check that a real swap happens, and that
 # a wrong key, a tampered archive, a different app, a version mismatch, an

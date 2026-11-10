@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the Mesa Zink + KosmicKrisp graphics stack for the BAR macOS port.
-# Replicates ExaDev/RecoilEngine .github/workflows/macos-build-gpu.yml locally.
+# Build the Mesa Zink + KosmicKrisp graphics stack for the macOS port.
+# The procedure for changing the pin or a patch is in docs/MAINTENANCE.md.
 #
 # You should NOT need to run this by hand: build-engine.sh and
 # packaging/release-build.sh invoke it automatically and it is a no-op when the
@@ -8,7 +8,8 @@
 #
 # Reproducible from pinned upstream: clones freedesktop Mesa at a pinned commit,
 # applies patches/mesa/*.patch, and builds. It records a provenance stamp
-# ($MESA_PREFIX/.driver-provenance = pinned commit + patch sha256s + spirv tag)
+# ($MESA_PREFIX/.driver-provenance = pinned commit + patch sha256s + spirv tag
+# + driver dependencies + macOS target + a hash of this script's commands)
 # and skips the whole build when the installed driver already matches it.
 #
 # Env:
@@ -189,8 +190,8 @@ export LIBRARY_PATH="/opt/homebrew/lib"
 # set above remap SOURCE paths only and do not touch it, so building straight
 # into a $HOME-based prefix embeds the builder's username in libEGL,
 # libgallium and libvulkan_kosmickrisp -- which is how v0.12 shipped
-# /Users/<builder>/... inside notarized, publicly downloadable dylibs
-# (LESSON-41). Build against a neutral prefix and relocate at install time.
+# /Users/<builder>/... inside notarized, publicly downloadable dylibs.
+# Build against a neutral prefix and relocate at install time.
 # Install names are rewritten to @rpath by packaging/release-build.sh either
 # way, so the neutral prefix costs nothing at link time.
 NEUTRAL_PREFIX="/opt/bar-driver"
@@ -252,7 +253,7 @@ file "$MESA_PREFIX/lib/libEGL.dylib" | grep -q arm64 || { echo "FATAL: libEGL no
 ls "$MESA_PREFIX/lib/"*.dylib
 ls "$MESA_PREFIX/share/vulkan/icd.d/" 2>/dev/null || true
 
-# LESSON-41: a hygiene claim about a binary must be verified BY GREPPING THE
+# A hygiene claim about a binary must be verified BY GREPPING THE
 # BINARY, never inferred from the compiler flags. Any absolute /Users/ path
 # compiled into a driver dylib is a leak the moment the bundle is notarized.
 # NB: raw byte grep, not `strings` — `strings` reads only the text section and
@@ -281,7 +282,7 @@ for d in "$MESA_PREFIX"/lib/*.dylib; do
   [ "$m" = "$MACOSX_DEPLOYMENT_TARGET" ] || { echo "FATAL: $(basename "$d") minos $m, want $MACOSX_DEPLOYMENT_TARGET"; exit 1; }
 done
 echo "driver deployment target: all dylibs minos $MACOSX_DEPLOYMENT_TARGET"
-[ "$leaks" -eq 0 ] || { echo "FATAL: driver embeds $leaks builder-path string(s) — see LESSON-41"; exit 1; }
+[ "$leaks" -eq 0 ] || { echo "FATAL: driver embeds $leaks builder-path string(s)"; exit 1; }
 echo "driver path-leak scan: 0 /Users/ strings across $(ls "$MESA_PREFIX"/lib/*.dylib | wc -l | tr -d ' ') dylibs"
 
 # stamp the provenance so subsequent builds are a no-op until the pin/patches change

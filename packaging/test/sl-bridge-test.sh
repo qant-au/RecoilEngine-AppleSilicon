@@ -2,7 +2,7 @@
 # sl-bridge-test.sh: drives packaging/sl-bridge.swift over its real TCP protocol
 # with a scripted lobby client. No GUI, no network (download tests use refused
 # inputs only). Needs a demo to parse: SL_BRIDGE_TEST_DEMO=<path.sdfz>, default
-# deps/oth014/duel.sdfz (a public 2026.07.04 BAR duel); skipped if absent.
+# deps/test-demos/duel.sdfz (a public 2026.07.04 BAR duel); skipped if absent.
 # Usage: packaging/test/sl-bridge-test.sh
 set -uo pipefail
 BAR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -13,7 +13,7 @@ ok(){ echo "  ok   $*"; PASS=$((PASS+1)); }; no(){ echo "  FAIL $*"; FAIL=$((FAI
 
 swiftc -O -o "$WORK/sl-bridge" "$BAR/packaging/sl-bridge.swift" 2>/dev/null || { echo "FATAL: compile failed"; exit 1; }
 WD="$WORK/wd"; mkdir -p "$WD/demos"
-DEMO="${SL_BRIDGE_TEST_DEMO:-$BAR/deps/oth014/duel.sdfz}"
+DEMO="${SL_BRIDGE_TEST_DEMO:-$BAR/deps/test-demos/duel.sdfz}"
 HAVE_DEMO=0; [ -f "$DEMO" ] && { cp "$DEMO" "$WD/demos/test.sdfz"; HAVE_DEMO=1; }
 
 # Fixture map: a .sdz holding maps/fixture.smf whose minimap is one solid DXT1

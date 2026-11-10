@@ -1,4 +1,4 @@
-// updater — the app's own in-app updater (acu-030), Sparkle-style but small
+// updater — the app's own in-app updater, Sparkle-style but small
 // enough to read in one sitting, with no third-party framework.
 //
 // On launch the launcher asks it to look at a signed feed (a small JSON file
