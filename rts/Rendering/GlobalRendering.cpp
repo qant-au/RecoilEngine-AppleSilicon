@@ -92,7 +92,13 @@ CONFIG(int, MinimizeOnFocusLoss).defaultValue(0).minimumValue(0).maximumValue(1)
 // on first run; this makes the intent explicit at the engine level too and is
 // the safer default while fullscreen mode transitions are macOS's weakest
 // window-server path.
-CONFIG(bool, Fullscreen).defaultValue(false).headlessValue(false).description("Sets whether the game will run in fullscreen, as opposed to a window. For Windowed Fullscreen of Borderless Window, set this to 0, WindowBorderless to 1, and WindowPosX and WindowPosY to 0.");
+// Other platforms keep upstream's default.
+#ifdef __APPLE__
+static constexpr bool fullscreenDefault = false;
+#else
+static constexpr bool fullscreenDefault = true;
+#endif
+CONFIG(bool, Fullscreen).defaultValue(fullscreenDefault).headlessValue(false).description("Sets whether the game will run in fullscreen, as opposed to a window. For Windowed Fullscreen of Borderless Window, set this to 0, WindowBorderless to 1, and WindowPosX and WindowPosY to 0.");
 CONFIG(bool, MacGrabWindowed).defaultValue(false).description("macOS: also keep the cursor inside the game window in windowed mode (borderless/fullscreen are always confined). Off by default: a plain window is where players expect to reach the rest of the desktop. Released on cmd-tab, restored on focus; /grabinput toggles it in-game.");
 CONFIG(bool, WindowBorderless).defaultValue(false).description("When set and Fullscreen is 0, will put the game in Borderless Window mode, also known as Windowed Fullscreen. When using this, it is generally best to also set WindowPosX and WindowPosY to 0");
 CONFIG(bool, BlockCompositing).defaultValue(false).safemodeValue(true).description("Disables kwin compositing to fix tearing, possible fixes low FPS in windowed mode, too.");
