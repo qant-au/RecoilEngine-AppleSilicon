@@ -300,6 +300,26 @@ static bool PerfPinActive()
 	return s_on;
 }
 
+// Pacing to the display (the VSync setting, see MetalPresent.h).
+static std::atomic<bool> g_paceToDisplay{false};
+
+void MacMetalPresent_SetDisplayPacing(bool on)
+{
+	g_paceToDisplay.store(on, std::memory_order_relaxed);
+}
+
+// Take one of the two present slots. Unpaced: only if one is free right now,
+// otherwise the caller drops the frame. Paced: wait for one, so the engine
+// renders no faster than frames reach the screen. The wait is short on
+// purpose: while the window is hidden or a display is changing, a present can
+// sit in nextDrawable for a second, and the game must not stall behind it.
+static bool TakePresentSlot()
+{
+	const bool pace = g_paceToDisplay.load(std::memory_order_relaxed) && !PerfPinActive();
+	const dispatch_time_t limit = pace ? dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC) : DISPATCH_TIME_NOW;
+	return dispatch_semaphore_wait(g_presentBudget, limit) == 0;
+}
+
 bool MacMetalPresent_Init(void* caMetalLayer)
 {
 	if (g_device != nil)
@@ -593,9 +613,10 @@ void MacMetalPresent_PresentIOSurface(bool flipY)
     // At most 2 presents queued: if the budget is exhausted the compositor is
     // behind by two full frames — drop THIS present (the next one shows newer
     // content anyway; content is never torn because each present reads its
-    // own slot). This keeps the main thread from ever blocking in
-    // nextDrawable (measured 12ms there = a hard 60fps cap on light scenes).
-    if (dispatch_semaphore_wait(g_presentBudget, DISPATCH_TIME_NOW) != 0) {
+    // own slot). The main thread never blocks in nextDrawable itself. With
+    // display pacing on (the VSync setting) it waits briefly for a slot first,
+    // so a frame is only dropped when the display is not taking any.
+    if (!TakePresentSlot()) {
         g_presentSkips++;
         if ((g_presentSkips & (g_presentSkips - 1)) == 0) // log 1,2,4,8,...
             fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",
@@ -750,7 +771,7 @@ bool MacMetalPresent_PresentPixelBuffer(void* base, size_t len, int w, int h,
     }
 
     // same budget-2 drop policy as the IOSurface path (see PresentIOSurface)
-    if (dispatch_semaphore_wait(g_presentBudget, DISPATCH_TIME_NOW) != 0) {
+    if (!TakePresentSlot()) {
         g_presentSkips++;
         if ((g_presentSkips & (g_presentSkips - 1)) == 0)
             fprintf(stderr, "[MetalPresent] dropped present (compositor 2 behind) x%llu\n",

@@ -30,6 +30,12 @@ void MacMetalPresent_SetSourceRGBA(int rgba);
 // MetalFX is unavailable). Safe to call at any time from the main thread.
 void MacMetalPresent_SetUpscaler(int mode);
 
+// Pacing to the display. On: a frame handed over while two presents are already
+// queued waits briefly for one of them, so the engine renders no faster than
+// the display shows. Off: such a frame is dropped at once and the engine runs
+// unpaced. Follows the engine's VSync setting (0 = off). Safe from any thread.
+void MacMetalPresent_SetDisplayPacing(bool on);
+
 // caMetalLayer: the CAMetalLayer* already attached to the SDL window's NSView
 // (the same pointer GetNSViewFromSDLWindow returns). Returns true on success.
 bool MacMetalPresent_Init(void* caMetalLayer);

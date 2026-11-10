@@ -118,8 +118,23 @@ void ApplyUpscaler()
 	MacMetalPresent_SetUpscaler(renderScaled.load(std::memory_order_relaxed) ? upscalerCfg.load(std::memory_order_relaxed) : 0);
 }
 
+// The engine's own VSync log line reports the SDL swap interval, which does not
+// apply here, so say what this present path is actually doing.
+void ApplyDisplayPacing(int vsync)
+{
+	MacMetalPresent_SetDisplayPacing(vsync != 0);
+	LOG("[EGL] VSync=%d: frames %s", vsync, (vsync != 0) ? "paced to the display" : "not paced to the display");
+}
+
 struct PresentDirectObserver {
 	void ConfigNotify(const std::string& key, const std::string& value) {
+		if (key == "VSync") {
+			// SDL's swap interval never reaches this present path (there is no
+			// SDL GL swap), so the setting is honoured here: any non-zero value
+			// paces the render loop to the display
+			ApplyDisplayPacing(atoi(value.c_str()));
+			return;
+		}
 		if (key == "MacUpscaler") {
 			upscalerCfg.store(atoi(value.c_str()), std::memory_order_relaxed);
 			ApplyUpscaler();
@@ -531,7 +546,8 @@ bool CreateContext(SDL_Window* window)
 		presentDirect.store(configHandler->GetInt("MacPresentDirect"), std::memory_order_relaxed);
 		upscalerCfg.store(configHandler->GetInt("MacUpscaler"), std::memory_order_relaxed);
 		ApplyUpscaler();
-		configHandler->NotifyOnChange(&presentDirectObserver, {"MacPresentDirect", "MacUpscaler"});
+		ApplyDisplayPacing(configHandler->GetInt("VSync"));
+		configHandler->NotifyOnChange(&presentDirectObserver, {"MacPresentDirect", "MacUpscaler", "VSync"});
 	}
 
 	// Set up the manual present path now that the layer + context exist.
