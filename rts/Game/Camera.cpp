@@ -769,9 +769,7 @@ float3 CCamera::GetMoveVectorFromState(bool fromKeyState) const
 	// std::max(1, w * edgeMoveWidth), so 0 collapses to a 1-PIXEL live band
 	// rather than none, and a pointer parked at x==0 still scrolls the camera
 	// indefinitely. The config declares minimumValue(0.0f), so 0 is a documented
-	// value that silently did not do what it says. Cost a whole perf baseline:
-	// the camera drifted off the scene and the run measured empty terrain at
-	// 191 fps (LESSON-57), with the key pinned to 0 the entire time.
+	// value that silently did not do what it says.
 	if (edgeMoveWidth <= 0.0f)
 		return v;
 

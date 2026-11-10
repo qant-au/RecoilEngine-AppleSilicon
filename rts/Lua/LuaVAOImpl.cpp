@@ -209,7 +209,7 @@ namespace {
 	// index for 32-bit buffers is 0xffffff (Lua 2^24 limit, LuaVBOImpl),
 	// which Metal cannot express (fixed all-ones), so KosmicKrisp runs an
 	// index-unroll compute prepass for EVERY such draw (~94% of all draws in
-	// a BAR battle = the Phase C 6.8fps bottleneck).
+	// a large battle, where it was the frame-rate bottleneck).
 	// SPRING_LUAVAO_FORCE_RESTART=1 restores the old unconditional enable.
 	bool UsePrimitiveRestart(GLenum mode)
 	{

@@ -1677,7 +1677,7 @@ void CGlobalRendering::ApplyWindowTitle()
 
 void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 {
-	// macOS fullscreen/borderless (2026-07-23 rewrite): realise both via SDL's
+	// macOS fullscreen/borderless: realise both via SDL's
 	// own SDL_WINDOW_FULLSCREEN_DESKTOP and let SDL own sizing + display
 	// selection. Empirically verified with an isolated SDL 2.32.10 probe on the
 	// exact repro rig (a 2x scaled-Retina "looks like 2560x1080" ultrawide + a 1x
@@ -1706,7 +1706,7 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 		MacPresent::RestoreDesktopDisplayMode(window, desktopRes_.x, desktopRes_.y);
 	}
 
-	// ── macOS window-mode policy (2026-07-23) ───────────────────────────────────
+	// ── macOS window-mode policy ───────────────────────────────────
 	//  * Windowed (Fullscreen=0, WindowBorderless=0): a bordered, movable window,
 	//    sized to FIT ON the screen (clamped below — a saved size larger than the
 	//    display is overridden down).
@@ -1728,7 +1728,7 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 	// the rig sets SPRING_MAC_FIXED_WINDOW=1 instead.
 	const bool macFixedWindow    = (getenv("SPRING_MAC_FIXED_WINDOW") != nullptr);
 	const bool macWantFullscreen = (fullScreen || borderless) && !macFixedWindow;
-	LOG("[GR::%s][macfs-rewrite-20260723] macWantFullscreen=%d fullScreen=%d borderless=%d fixedWin=%d",
+	LOG("[GR::%s] macOS window mode: macWantFullscreen=%d fullScreen=%d borderless=%d fixedWin=%d",
 	    __func__, int(macWantFullscreen), int(fullScreen), int(borderless), int(macFixedWindow));
 #endif
 	winPosX = configHandler->GetInt("WindowPosX");
@@ -1815,8 +1815,7 @@ void CGlobalRendering::SetWindowAttributes(SDL_Window* window)
 	// bands (measured 2513x1050 at (47,30) on a 2560x1080 desktop with a
 	// left Dock). For the desktop-sized borderless window that IS BAR's
 	// "fullscreen" this leaves dead screen bands the pointer escapes into
-	// (LEAVE event -> pointer recentre = broken edge scroll, issue class of
-	// v0.12-RC bug 1); for an exclusive-fullscreen window it shrinks the
+	// (LEAVE event -> pointer recentre = broken edge scroll); for an exclusive-fullscreen window it shrinks the
 	// game into a sub-rect floating over the fullscreen shield (black
 	// bands). Never zoom in either mode; plain windowed keeps the native
 	// maximize behavior.
@@ -2237,8 +2236,7 @@ void CGlobalRendering::SaveWindowPosAndSize()
 	// saving those overwrote XResolutionWindowed/WindowPos with e.g. the
 	// zoomed visibleFrame rect (2513x1050 at 47,30), which then made the
 	// borderless mac-guard treat the next "Borderless" request as
-	// not-desktop-sized and silently border it (v0.12-RC mode-switch
-	// corruption chain). Only true windowed geometry is user state worth
+	// not-desktop-sized and silently border it. Only true windowed geometry is user state worth
 	// keeping.
 	if (borderless)
 		return;

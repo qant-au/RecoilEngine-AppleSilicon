@@ -63,15 +63,15 @@ void MsgBox(const char* message, const char* caption, unsigned int flags)
 {
 #if !defined(DEDICATED) && !defined(HEADLESS)
 	const char* msg = (message != nullptr) ? message : "";
-	const char* cap = (caption != nullptr) ? caption : "Beyond All Reason";
+	const char* cap = (caption != nullptr) ? caption : "Recoil";
 
 	// 1) rich bundled helper next to the executable
 	const std::string helper = executableDir() + "/error-dialog";
 	if (!helper.empty() && access(helper.c_str(), X_OK) == 0) {
 		std::vector<const char*> argv = { helper.c_str(), "--title", cap, "--message", msg };
-		// BAR_INFOLOG is exported by the launcher; lets the dialog show the
-		// full this-session log for a bug report.
-		if (const char* infolog = getenv("BAR_INFOLOG")) {
+		// SPRING_INFOLOG, when a launcher exports it, lets the dialog show
+		// the full this-session log for a bug report.
+		if (const char* infolog = getenv("SPRING_INFOLOG")) {
 			argv.push_back("--logfile");
 			argv.push_back(infolog);
 		}
@@ -79,18 +79,20 @@ void MsgBox(const char* message, const char* caption, unsigned int flags)
 			return;
 	}
 
-	// 2) fallback: osascript dialog (escape the AppleScript string literal)
-	std::string body(msg);
-	std::string esc;
-	esc.reserve(body.size() + 16);
-	for (const char c : body) {
-		if (c == '"' || c == '\\') esc.push_back('\\');
-		if (c == '\n') { esc += "\\n"; continue; }
-		if (c == '\r') continue;
-		esc.push_back(c);
-	}
+	// 2) fallback: osascript dialog (both strings are escaped for an
+	// AppleScript string literal)
+	const auto escape = [](const char* text) {
+		std::string esc;
+		for (const char* c = text; *c != '\0'; ++c) {
+			if (*c == '"' || *c == '\\') esc.push_back('\\');
+			if (*c == '\n') { esc += "\\n"; continue; }
+			if (*c == '\r') continue;
+			esc.push_back(*c);
+		}
+		return esc;
+	};
 	const std::string script =
-		"display dialog \"" + esc + "\" with title \"" + std::string(cap) +
+		"display dialog \"" + escape(msg) + "\" with title \"" + escape(cap) +
 		"\" buttons {\"OK\"} default button 1 with icon stop";
 	runAndWait("/usr/bin/osascript",
 	           { "/usr/bin/osascript", "-e", script.c_str() });

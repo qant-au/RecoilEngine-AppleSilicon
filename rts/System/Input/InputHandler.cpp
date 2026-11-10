@@ -27,10 +27,10 @@ InputHandler input;
 //
 // Rationale: OS-level input synthesis (CGEvent on macOS) cannot reach the
 // game when the console session is locked/headless, which blocks unattended
-// verification of input-driven rendering fixes (minimap selection box #2,
-// edge scrolling #7). Pushing events into SDL's own queue exercises the REAL
+// verification of input-driven rendering fixes (the minimap selection box,
+// edge scrolling). Pushing events into SDL's own queue exercises the REAL
 // input pipeline from SDL_PollEvent onward — InputHandler -> MouseInput
-// (incl. the macOS Retina coordinate mapping under test in #7) ->
+// (incl. the macOS Retina coordinate mapping) ->
 // CMouseHandler -> minimap/selection code — differing from a physical mouse
 // only below the SDL boundary. Pair with SPRING_DBG_INPUT=1 to log how every
 // injected event is received and mapped.

@@ -54,7 +54,7 @@ bool CheckErrorCode(asio::error_code& err, const asio::ip::udp::endpoint& dest)
 			LOG_L(L_ERROR,
 				"Cannot reach %s: macOS is blocking Local Network access for "
 				"this app. Open System Settings > Privacy & Security > Local "
-				"Network and enable Beyond All Reason, then retry. "
+				"Network and enable this application, then retry. "
 				"(Playing on internet servers is not affected.)",
 				dest.address().to_string().c_str());
 		}

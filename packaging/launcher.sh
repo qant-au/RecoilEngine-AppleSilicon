@@ -91,7 +91,7 @@ export GALLIUM_DRIVER=zink
 export MESA_LOADER_DRIVER_OVERRIDE=zink
 export MESA_GL_VERSION_OVERRIDE=4.6
 # NB do NOT rely on DYLD_* here: the hardened runtime strips them. Zink finds
-# the bundled Vulkan loader via @rpath (patches/mesa/0004) and the engine
+# the bundled Vulkan loader via @rpath (patches/mesa/0006) and the engine
 # links bundled dylibs via LC_RPATH — the env below is only a courtesy for
 # ad-hoc/dev bundles that run without library validation.
 export DYLD_FALLBACK_LIBRARY_PATH="$FRAMEWORKS"
@@ -645,12 +645,12 @@ if [ -x "$HERE/sl-bridge" ]; then
   # give it a moment to write sl-connection.json before the lobby looks for it
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -f "$WRITEDIR/sl-connection.json" ] && break; sleep 0.1; done
 fi
-# BAR_INFOLOG lets the engine's error dialog (Platform::MsgBox) attach the
+# SPRING_INFOLOG lets the engine's error dialog (Platform::MsgBox) attach the
 # full this-session log to any fatal it shows.
 # The engine runs as a child, not via exec, so the lobby can come back after an
 # engine error exit (a failed savegame load quits the whole engine, menu and
 # all). From Vandomas/RecoilEngine-AppleSilicon 64d245eca0.
-export SPRING_DATADIR="$RES" BAR_INFOLOG="$WRITEDIR/infolog.txt" BAR_PORT_VERSION="$PORT_VERSION"
+export SPRING_DATADIR="$RES" SPRING_INFOLOG="$WRITEDIR/infolog.txt" SPRING_PACKAGE_VERSION="$PORT_VERSION"
 while :; do
   T0=$SECONDS
   "$HERE/spring" --write-dir "$WRITEDIR" --menu "$LOBBY_RAPID" "$@"

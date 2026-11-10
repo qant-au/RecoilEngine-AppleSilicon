@@ -44,7 +44,7 @@
 
 // Diagnostic input-method logging (KEEP; off by default).
 //
-// Rationale: several input reports (issue #7 edge-scroll, trackpad / precise-
+// Rationale: several input reports (edge scroll, trackpad / precise-
 // scroll complaints) arrive without the reporter's device, and we cannot tell
 // from an ordinary infolog what the engine actually received. Setting the
 // environment variable SPRING_DBG_INPUT=1 makes every SDL mouse/wheel/motion
@@ -145,7 +145,7 @@ static int2 ScaleMouseCoords(int x, int y)
 	// Map the last reachable logical coordinate (sdl size - 1) onto the last
 	// pixel coordinate (viewSize - 1): plain size-ratio scaling tops out 2px
 	// short of the right/bottom edge on 2x Retina, which broke edge scrolling
-	// there (engine edge tests compare against viewSize - 1; issue #7).
+	// there (engine edge tests compare against viewSize - 1).
 	const int scaledX = (sdlW > 1)
 		? (int)std::lround((double)x * (double)(globalRendering->viewSizeX - 1) / (double)(sdlW - 1))
 		: 0;
