@@ -253,15 +253,22 @@ ls "$MESA_PREFIX/share/vulkan/icd.d/" 2>/dev/null || true
 # compiled into a driver dylib is a leak the moment the bundle is notarized.
 # NB: raw byte grep, not `strings` — `strings` reads only the text section and
 # silently misses debug-map/symbol-table paths.
+# /Users/ alone misses a checkout anywhere else, so this build's own roots are
+# searched for as well.
+LEAK_RE='/Users/'
+for root in "$BAR" "$(cd "$BAR" && pwd -P)" "$HOME"; do
+  [ "${#root}" -ge 4 ] || continue
+  LEAK_RE="$LEAK_RE|$(printf '%s' "$root" | sed 's/[][\.^$*+?(){}|]/\\&/g')"
+done
 leaks=0
 for d in "$MESA_PREFIX"/lib/*.dylib; do
   # LC_ALL=C on sort too: in a UTF-8 locale sort aborts on the raw bytes grep
   # captures ("Illegal byte sequence") and the scan silently sees nothing.
   # Skip "$MESA_PREFIX/lib/..." strings: those are the install names repointed
   # above, which release-build.sh rewrites to @rpath and audits in the bundle.
-  hits="$(LC_ALL=C grep -a -o '/Users/[^ "]\{0,120\}' "$d" 2>/dev/null | LC_ALL=C sort -u \
+  hits="$(LC_ALL=C grep -a -o -E "($LEAK_RE)[^ \"]{0,120}" "$d" 2>/dev/null | LC_ALL=C sort -u \
           | LC_ALL=C grep -v -F "$MESA_PREFIX/lib/" || true)"
-  [ -z "$hits" ] || { n=$(echo "$hits" | wc -l | tr -d ' '); echo "FATAL: $(basename "$d") embeds $n /Users/ path(s):"; echo "$hits" | head -5 | sed 's/^/    /'; leaks=$((leaks+n)); }
+  [ -z "$hits" ] || { n=$(echo "$hits" | wc -l | tr -d ' '); echo "FATAL: $(basename "$d") embeds $n builder path(s):"; echo "$hits" | head -5 | sed 's/^/    /'; leaks=$((leaks+n)); }
 done
 # The driver must load on the declared floor: fail if any dylib's minos is above it.
 for d in "$MESA_PREFIX"/lib/*.dylib; do
