@@ -1,0 +1,13 @@
+# Conversion sites the sanitizer replay reports in code that can reach synced
+# state, each looked at and shown to give the same result on x86 and arm64.
+# scripts/sanitize-replay.sh fails on any such site that is not listed here.
+# One site per line: <file>:<line>, then the reason after a tab.
+#
+# Both are upstream Lua, unchanged by this repository: a number key is cast to
+# int and cast back to see whether it is an integer. Out of range the cast is
+# undefined (x86 gives INT_MIN, arm64 INT_MAX), but the value cast back never
+# equals the key except for exactly 2^31 on arm64, where the lookup then takes
+# the integer path, misses the array part (far beyond its size limit) and
+# finds the same hash node the generic path finds. Seen with the key 1e10.
+rts/lib/lua/src/ltable.cpp:125	arrayindex: the result is only used when 0 < k <= 2^26
+rts/lib/lua/src/ltable.cpp:477	luaH_get: same node found by the integer and the generic path

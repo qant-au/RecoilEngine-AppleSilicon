@@ -17,7 +17,8 @@
 #
 # Usage: scripts/sanitize-replay.sh <demo.sdfz> [replay-check.sh options...]
 # Prints SANITIZE_REPLAY_OK when the replay stays in sync and no conversion in
-# synced code was reported, SANITIZE_REPLAY_FINDINGS (exit 1) otherwise. The
+# synced code was reported that is not already explained in
+# testkit/sanitize/known-sites.txt, SANITIZE_REPLAY_FINDINGS (exit 1) otherwise. The
 # full reports stay in logs/local/sanitize-<stamp>/.
 set -uo pipefail
 BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
@@ -64,8 +65,22 @@ cat "$OUT"/ubsan.* 2>/dev/null | awk '/runtime error:/ {
     msg = $0; sub(/^.*runtime error: /, "", msg); sub(/^[^ ]+ is outside/, "value is outside", msg)
     print loc "\t" msg }' | sort | uniq -c | sort -rn > "$OUT/sites.txt"
 total=$(wc -l < "$OUT/sites.txt" | tr -d ' ')
-# code that can reach synced state
-synced=$(grep -E 'rts/(Sim|System/Sync|Map)/|rts/Lua/LuaSynced|rts/System/(float3|float4|SpringMath|FastMath|Matrix44f|myMath)' "$OUT/sites.txt" || true)
+# code that can reach synced state (the Lua VM runs synced gadgets too), less
+# the sites already looked at and listed with their reason
+KNOWN="$BAR/testkit/sanitize/known-sites.txt"
+synced=$(grep -E 'rts/(Sim|System/Sync|Map|lib/lua|lib/streflop)/|rts/Lua/LuaSynced|rts/System/(float3|float4|SpringMath|FastMath|Matrix44f|myMath)' "$OUT/sites.txt" || true)
+known=0
+if [ -n "$synced" ] && [ -f "$KNOWN" ]; then
+  rest=""
+  while IFS= read -r line; do
+    site=$(printf '%s' "$line" | awk '{print $2}')
+    if grep -v '^#' "$KNOWN" | cut -f1 | grep -qx "$site"; then known=$((known+1)); else rest="$rest$line
+"; fi
+  done <<EOF_SITES
+$synced
+EOF_SITES
+  synced=$(printf '%s' "$rest" | sed '/^$/d')
+fi
 echo "=== $total distinct conversion site(s) reported ($OUT/sites.txt)"
 [ "$total" -gt 0 ] && sed 's/^/    /' "$OUT/sites.txt" | head -40
 if [ "$replay_rc" -ne 0 ]; then
@@ -76,4 +91,4 @@ if [ -n "$synced" ]; then
   printf '%s\n' "$synced" | sed 's/^/    /'
   exit 1
 fi
-echo "SANITIZE_REPLAY_OK ($total site(s) reported, none in synced code)"
+echo "SANITIZE_REPLAY_OK ($total site(s) reported; in code that can reach synced state: $known, all listed in testkit/sanitize/known-sites.txt)"
