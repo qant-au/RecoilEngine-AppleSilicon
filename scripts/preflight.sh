@@ -1,11 +1,12 @@
 #!/bin/bash
 # Pre-run checks for unattended builds and test runs on macOS
-# (docs/AGENT_FAILURE_MODES.md). Reports; changes nothing on the machine except
-# stopping leftover engine processes via reap.sh. Exit 0 = ready, 1 = a blocker.
+# (docs/TROUBLESHOOTING.md). Reports only: it changes nothing on the machine.
+# Leftover engine processes are listed; scripts/reap.sh stops them.
+# Exit 0 = ready, 1 = a blocker.
 #
 # Usage: scripts/preflight.sh
 set -uo pipefail
-BAR="${BAR:-$(cd "$(dirname "$0")/.." && pwd)}"
+BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 BLOCK=0; ok(){ echo "  ok    $*"; }; warn(){ echo "  warn  $*"; }; bad(){ echo "  FAIL  $*"; BLOCK=1; }
 
 echo "toolchain:"
@@ -22,9 +23,9 @@ git -C "$BAR" describe --tags --abbrev=0 --match '[0-9]*' >/dev/null 2>&1 \
 echo "autonomy blockers:"
 dt=$(defaults read com.apple.CrashReporter DialogType 2>/dev/null || echo "default")
 if [ "$dt" = "none" ]; then ok "crash-reporter dialog suppressed"
-else warn "crash-reporter dialog is '$dt': a crash pops a modal that halts unattended runs (AB-1). To suppress (a user setting, decide before running): defaults write com.apple.CrashReporter DialogType none"; fi
+else warn "crash-reporter dialog is '$dt': a crash pops a modal that halts unattended runs. To suppress (a user setting, decide before running): defaults write com.apple.CrashReporter DialogType none"; fi
 
 echo "stragglers:"
-"$BAR/scripts/reap.sh" | sed 's/^/  /'
+"$BAR/scripts/reap.sh" --dry-run | sed 's/^/  /'
 
 [ "$BLOCK" = 0 ] && echo "PREFLIGHT_OK" || { echo "PREFLIGHT_FAIL"; exit 1; }
