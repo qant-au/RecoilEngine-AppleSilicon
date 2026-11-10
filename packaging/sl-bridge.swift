@@ -81,10 +81,30 @@ func log(_ s: String) {
     else { FileHandle.standardError.write(line.data(using: .utf8)!) }
 }
 
-// A path the lobby names must stay inside the write dir.
+// A path the lobby names must stay inside the write dir, also once symlinks are
+// followed: a link inside the write dir must not lead out of it. The leaf may
+// not exist yet, so the deepest existing ancestor is what gets resolved.
+let writeDirResolved = writeDir.resolvingSymlinksInPath()
+func staysInsideWriteDir(_ url: URL) -> Bool {
+    let fm = FileManager.default
+    func exists(_ p: String) -> Bool { (try? fm.attributesOfItem(atPath: p)) != nil }   // lstat: sees a dangling link
+    var probe = url.standardizedFileURL
+    var tail: [String] = []
+    while !exists(probe.path) && probe.path != "/" {
+        tail.insert(probe.lastPathComponent, at: 0)
+        probe.deleteLastPathComponent()
+    }
+    // a link whose target does not exist cannot be resolved: refuse it
+    if let t = (try? fm.attributesOfItem(atPath: probe.path))?[.type] as? FileAttributeType, t == .typeSymbolicLink,
+       !fm.fileExists(atPath: probe.path) { return false }
+    var resolved = probe.resolvingSymlinksInPath()
+    for c in tail { resolved.appendPathComponent(c) }
+    let p = resolved.path, root = writeDirResolved.path
+    return p == root || p.hasPrefix(root + "/")
+}
 func insideWriteDir(_ rel: String) -> URL? {
     let u = writeDir.appendingPathComponent(rel).standardizedFileURL
-    return u.path.hasPrefix(writeDir.path + "/") ? u : nil
+    return (u.path.hasPrefix(writeDir.path + "/") && staysInsideWriteDir(u)) ? u : nil
 }
 
 // ---- connection --------------------------------------------------------------
@@ -166,7 +186,12 @@ func replayInfo(relativePath: String) -> [String: Any]? {
     // unixTime 296 (u64), scriptSize 304, demoStreamSize 308, gameTime 312, ...,
     // winningAllyTeamsSize 348 (header is 352 bytes)
     let winSize = i32(d, 348)
-    guard headerSize > 0, scriptSize >= 0, headerSize + scriptSize <= d.count else { return nil }
+    // every size comes from the file: a negative one would put the slices below
+    // out of range, so such a file is simply not a demo
+    guard headerSize > 0, scriptSize >= 0, streamSize >= 0, winSize >= 0,
+          headerSize + scriptSize <= d.count else {
+        log("ReadReplayInfo: bad demo header: \(relativePath)"); return nil
+    }
     let script = String(decoding: d.subdata(in: headerSize..<headerSize+scriptSize), as: UTF8.self)
     var winners: [Int] = []
     let wOff = headerSize + scriptSize + streamSize
@@ -562,20 +587,32 @@ func handle(_ name: String, _ cmd: [String: Any], from client: Client) {
     case "OpenFile":
         guard let path = cmd["path"] as? String, let u = URL(string: path) else { return }
         var allowed = false
+        var openArgs = [u.absoluteString]
         if u.scheme == "https" || u.scheme == "http" { allowed = true }
         else if u.scheme == "file" {
-            let p = URL(fileURLWithPath: u.path).standardizedFileURL.path
-            allowed = p == writeDir.path || p.hasPrefix(writeDir.path + "/")
+            let f = URL(fileURLWithPath: u.path).standardizedFileURL
+            allowed = (f.path == writeDir.path || f.path.hasPrefix(writeDir.path + "/")) && staysInsideWriteDir(f)
+            if allowed {
+                // the lobby asks for <writedir>/demos/ before any replay exists: create a
+                // folder inside the write dir rather than failing to open it (from
+                // Vandomas/RecoilEngine-AppleSilicon 80e42afbcd)
+                if u.path.hasSuffix("/") {
+                    try? FileManager.default.createDirectory(atPath: f.path, withIntermediateDirectories: true)
+                }
+                // Only a plain folder or a text/image file is opened. Anything else
+                // (an app bundle, a script, an unknown type) is shown in Finder
+                // instead, so nothing downloaded into the write dir gets launched.
+                var isDir: ObjCBool = false
+                let present = FileManager.default.fileExists(atPath: f.path, isDirectory: &isDir)
+                let ext = f.pathExtension.lowercased()
+                let viewable: Set<String> = ["txt", "log", "json", "cfg", "lua", "md", "png", "jpg", "jpeg"]
+                let opensDirectly = present && (isDir.boolValue ? ext.isEmpty : viewable.contains(ext))
+                openArgs = opensDirectly ? [f.path] : ["-R", f.path]
+            }
         }
         if allowed {
-            // the lobby asks for <writedir>/demos/ before any replay exists: create a
-            // folder inside the write dir rather than failing to open it (from
-            // Vandomas/RecoilEngine-AppleSilicon 80e42afbcd), and report open's
-            // real result, not just that it started
-            if u.scheme == "file" && u.path.hasSuffix("/") {
-                try? FileManager.default.createDirectory(atPath: u.path, withIntermediateDirectories: true)
-            }
-            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = [u.absoluteString]
+            // report open's real result, not just that it started
+            let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = openArgs
             var ok = false
             if (try? p.run()) != nil { p.waitUntilExit(); ok = p.terminationStatus == 0 }
             client.send(ok ? "OpenFileFinished" : "OpenFileFailed", ["path": path])
@@ -635,6 +672,9 @@ listener.newConnectionHandler = { conn in
     let c = Client(conn)
     clients[ObjectIdentifier(c)] = c
     log("lobby connected")
+    func drop(_ why: String) {
+        clients.removeValue(forKey: ObjectIdentifier(c)); log(why); conn.cancel()
+    }
     func receive() {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { data, _, done, err in
             if let data = data {
@@ -642,12 +682,20 @@ listener.newConnectionHandler = { conn in
                 while let nl = c.buffer.firstIndex(of: 0x0A) {
                     let line = c.buffer.subdata(in: c.buffer.startIndex..<nl)
                     c.buffer.removeSubrange(c.buffer.startIndex...nl)
-                    if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any], let name = obj["name"] as? String {
-                        handle(name, obj["command"] as? [String: Any] ?? [:], from: c)
+                    if line.allSatisfy({ $0 == 0x0D || $0 == 0x20 || $0 == 0x09 }) { continue }   // blank line
+                    // The lobby speaks one JSON object per line and nothing else. A peer
+                    // that sends any other line (an HTTP request, for one) is not the
+                    // lobby: close it instead of reading on for something that parses.
+                    guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+                          let name = obj["name"] as? String else {
+                        drop("closed a connection that did not speak the lobby protocol"); return
                     }
+                    handle(name, obj["command"] as? [String: Any] ?? [:], from: c)
                 }
+                // no lobby message is anywhere near this long without a newline
+                if c.buffer.count > 1 << 20 { drop("closed a connection: line over 1 MB"); return }
             }
-            if done || err != nil { clients.removeValue(forKey: ObjectIdentifier(c)); log("lobby disconnected"); conn.cancel(); return }
+            if done || err != nil { drop("lobby disconnected"); return }
             receive()
         }
     }

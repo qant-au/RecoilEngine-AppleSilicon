@@ -112,6 +112,48 @@ R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"../../../etc/hosts
 R=$(send '{"name":"OpenFile","command":{"path":"file:///etc/hosts"}}')
 echo "$R" | grep -q '"OpenFileFailed"' && ok "OpenFile outside write dir refused" || no "OpenFile: $R"
 
+# A link inside the write dir must not lead out of it.
+mkdir -p "$WORK/outside"; ln -s "$WORK/outside" "$WD/link"
+R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"link/x.sdfz"}}')
+[ -z "$R" ] && grep -q 'outside write dir: link/x.sdfz' "$WORK/bridge.log" && ok "symlink out of the write dir refused" || no "symlink escape: $R"
+R=$(send "{\"name\":\"OpenFile\",\"command\":{\"path\":\"file://$WD/link/sub/\"}}")
+echo "$R" | grep -q '"OpenFileFailed"' && [ ! -e "$WORK/outside/sub" ] && ok "OpenFile through a symlink refused" || no "OpenFile symlink: $R"
+
+# A replay whose header sizes are negative is not a demo, and must not take the bridge down.
+cat > "$WORK/baddemo.py" <<'PY'
+import gzip, struct, sys
+h = bytearray(400); h[0:15] = b'spring demofile'
+struct.pack_into('<i', h, 20, 352)       # headerSize
+struct.pack_into('<i', h, 304, 0)        # scriptSize
+struct.pack_into('<i', h, 308, -100000)  # demoStreamSize
+struct.pack_into('<i', h, 348, 4)        # winningAllyTeamsSize
+gzip.open(sys.argv[1], 'wb').write(bytes(h))
+PY
+python3 "$WORK/baddemo.py" "$WD/demos/bad.sdfz"
+R=$(send '{"name":"ReadReplayInfo","command":{"relativePath":"demos/bad.sdfz"}}')
+kill -0 "$BPID" 2>/dev/null && grep -q 'bad demo header: demos/bad.sdfz' "$WORK/bridge.log" \
+  && ok "malformed replay rejected, bridge still running" || no "malformed replay: $R"
+
+# A peer that does not speak the lobby protocol (an HTTP request, for one) is
+# closed, and a command in its body is never run.
+cat > "$WORK/http.py" <<'PY'
+import json, socket, sys
+c = json.load(open(sys.argv[1]))
+s = socket.create_connection((c["_sl_address"], c["_sl_port"]), timeout=5)
+body = '{"name":"ReadReplayInfo","command":{"relativePath":"demos/http-probe.sdfz"}}\n'
+s.sendall(("POST / HTTP/1.1\r\nHost: x\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body)).encode())
+s.settimeout(3)
+try:
+    closed = s.recv(1) == b""
+except ConnectionResetError:
+    closed = True
+except Exception:
+    closed = False
+sys.exit(0 if closed else 1)
+PY
+python3 "$WORK/http.py" "$WD/sl-connection.json" && ! grep -q 'http-probe' "$WORK/bridge.log" \
+  && ok "HTTP request closed, its body not run" || no "an HTTP client was served"
+
 R=$(send '{"name":"Download","command":{"name":"x","type":"resource","resource":{"url":"http://example.com/a","destination":"a"}}}')
 echo "$R" | grep -q '"DownloadFinished"' && echo "$R" | grep -q '"isSuccess":false' && ok "non-https resource refused" || no "resource http: $R"
 
