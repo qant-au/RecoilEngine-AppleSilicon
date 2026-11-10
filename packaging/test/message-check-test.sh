@@ -205,6 +205,11 @@ o=$(san '<a href="javascript:alert(1)">x</a>'); [ "${o/javascript:/}" = "$o" ] &
 o=$(san '<p onclick="bad()">x</p>'); [ "${o/onclick/}" = "$o" ] && ok "event-handler attribute stripped" || bad "onclick" "$o"
 o=$(san '<iframe src="http://e/"></iframe><b>keep</b>'); { [ "${o/iframe/}" = "$o" ] && case "$o" in *"<b>keep</b>"*) true;; *) false;; esac; } && ok "iframe stripped, siblings kept" || bad "iframe" "$o"
 o=$(san '<a href="https://safe.example">l</a>'); case "$o" in *'href="https://safe.example"'*) ok "safe https link preserved";; *) bad "safe link" "$o";; esac
+o=$(san "<a href='https://safe.example/q'>l</a>"); case "$o" in *"href='https://safe.example/q'"*) ok "single-quoted https link preserved";; *) bad "safe link (single quotes)" "$o";; esac
+o=$(san '<a href="file:///Applications/Calculator.app">l</a>'); [ "${o/file:/}" = "$o" ] && ok "file: link removed" || bad "file href" "$o"
+o=$(san "<a href='smb://host/share'>l</a><a href=\"myapp://do\">m</a>"); { [ "${o/smb:/}" = "$o" ] && [ "${o/myapp:/}" = "$o" ]; } && ok "other schemes removed" || bad "scheme href" "$o"
+o=$(san '<a href=file:///etc/hosts>l</a>'); [ "${o/file:/}" = "$o" ] && ok "unquoted link value removed" || bad "unquoted href" "$o"
+o=$(san '<a href="http://plain.example">l</a>'); [ "${o/http:/}" = "$o" ] && ok "plain http link removed" || bad "http href" "$o"
 
 echo
 echo "RESULT: $pass passed, $fail failed"

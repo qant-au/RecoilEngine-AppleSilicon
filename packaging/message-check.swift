@@ -69,19 +69,27 @@ if !url.isFileURL && url.scheme?.lowercased() != "https" { exit(0) }
 let seenPath = arg("--seen-file")
 let timeout = Double(arg("--timeout") ?? "4") ?? 4
 let maxConfigBytes = 8 * 1024 * 1024   // 8 MB — generous (a real config is KB)
-// The config is hosted on GitHub's raw CDN; require that host (and only allow
-// redirects that stay on it), so the connection can only ever be to GitHub.
-let allowedHostSuffix = "githubusercontent.com"
+// The config is hosted on GitHub's raw CDN. Require exactly that host, and the
+// same account and repository the configured URL names, for the request, for
+// any redirect and for the final response: a suffix match would also accept a
+// look-alike domain, and the host alone would accept any other account's file.
+let allowedHost = "raw.githubusercontent.com"
+let allowedPathPrefix: String = {
+    let parts = url.path.split(separator: "/", omittingEmptySubsequences: true)
+    return parts.count >= 2 ? "/\(parts[0])/\(parts[1])/" : "/"
+}()
+func isAllowedConfigURL(_ u: URL?) -> Bool {
+    guard let u = u, u.scheme?.lowercased() == "https", u.host?.lowercased() == allowedHost else { return false }
+    return u.path.hasPrefix(allowedPathPrefix)
+}
 
-// Block any redirect that leaves GitHub's raw CDN (defence against a redirect
-// to an attacker host); redirects that stay on githubusercontent.com are fine.
+// Block any redirect that leaves that repository on GitHub's raw CDN.
 final class RedirectGuard: NSObject, URLSessionTaskDelegate {
     func urlSession(_ s: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest req: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) {
-        let host = req.url?.host?.lowercased() ?? ""
-        completionHandler(host.hasSuffix(allowedHostSuffix) ? req : nil)
+        completionHandler(isAllowedConfigURL(req.url) ? req : nil)
     }
 }
 
@@ -97,7 +105,7 @@ func fetchConfig() -> Data? {
         guard let d = try? Data(contentsOf: url), d.count <= maxConfigBytes else { return nil }
         return d
     }
-    guard let host = url.host?.lowercased(), host.hasSuffix(allowedHostSuffix) else { return nil }
+    guard isAllowedConfigURL(url) else { return nil }
     var out: Data?
     let sem = DispatchSemaphore(value: 0)
     var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
@@ -109,7 +117,7 @@ func fetchConfig() -> Data? {
     let session = URLSession(configuration: cfg, delegate: RedirectGuard(), delegateQueue: nil)
     session.dataTask(with: req) { data, resp, _ in
         if let http = resp as? HTTPURLResponse, http.statusCode == 200,
-           let fh = http.url?.host?.lowercased(), fh.hasSuffix(allowedHostSuffix),
+           isAllowedConfigURL(http.url),
            http.expectedContentLength <= Int64(maxConfigBytes),
            let d = data, d.count <= maxConfigBytes {
             out = d
@@ -140,8 +148,11 @@ func sanitizeHTML(_ html: String) -> String {
     }
     strip("\\son\\w+\\s*=\\s*\"[^\"]*\"")          // onclick=, onload=, …
     strip("\\son\\w+\\s*=\\s*'[^']*'")
-    strip("(href|src)\\s*=\\s*\"\\s*(javascript|data|vbscript):[^\"]*\"")
-    strip("(href|src)\\s*=\\s*'\\s*(javascript|data|vbscript):[^']*'")
+    // a link may only be https: every other scheme (file, smb, a custom app
+    // scheme, javascript, ...) and every unquoted value is removed
+    strip("(href|src)\\s*=\\s*\"(?!\\s*https://)[^\"]*\"")
+    strip("(href|src)\\s*=\\s*'(?!\\s*https://)[^']*'")
+    strip("(href|src)\\s*=\\s*(?![\"'])[^\\s>]+")
     return s
 }
 
@@ -285,7 +296,9 @@ final class MessageDialog: NSObject {
     }
     @objc func clicked(_ sender: NSButton) {
         let b = buttons[sender.tag]
-        if b.action == "open-url", let u = b.url, let ou = URL(string: u) {
+        // https only: the config must not be able to open a local file, a network
+        // share or another app through a button
+        if b.action == "open-url", let u = b.url, let ou = URL(string: u), ou.scheme?.lowercased() == "https" {
             NSWorkspace.shared.open(ou)
             if (b.then ?? "continue") == "stay" { return }   // keep the window up
         }
