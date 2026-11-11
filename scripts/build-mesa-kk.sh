@@ -25,10 +25,11 @@ set -euo pipefail
 BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 # Deployment target: the floor the shipped bundle declares (LSMinimumSystemVersion,
-# packaging/release-build.sh). macOS 27.0 since 2026-11-08 (was 26.0, KosmicKrisp
-# needs Metal 4). Without it clang defaults to the BUILD host's OS, so the floor
+# packaging/release-build.sh). macOS 26.0, the lowest KosmicKrisp supports (it
+# needs Metal 4); 27.0 from 2026-11-08 to 2026-11-11, lowered by maintainer
+# decision. Without it clang defaults to the BUILD host's OS, so the floor
 # silently follows whichever Mac built it. clang, swiftc, meson and cmake all read it.
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 DEPS="$BAR/deps"
 MESA_COMMIT="90a959ebba9dbb36f2ea5176091c15d6ebdd0af0"   # mesa-26.3.0-rc3 (was 8f272b1fe18e, 26.2.0-devel, 2026-06-13)
 SPIRV_XLAT_TAG="v19.1.7"

@@ -22,7 +22,7 @@ case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the
 DEPS="$BAR/deps"
 PREFIX="$DEPS/driver-deps"
 DL="$DEPS/driver-deps-src"; WORK="$DEPS/driver-deps-build"
-TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 SDK_TAG=vulkan-sdk-1.4.363.0
 
 SOURCES="

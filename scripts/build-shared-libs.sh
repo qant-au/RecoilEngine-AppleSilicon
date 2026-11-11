@@ -27,7 +27,7 @@ PREFIX="$DEPS/shared"
 STATIC="${STATIC_PREFIX:-$DEPS/static}"
 NEUTRAL=/opt/bar-thirdparty
 DL="$DEPS/shared-src"; WORK="$DEPS/shared-build"; STAGE="$DEPS/shared-stage"
-TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 
 SOURCES='
 freetype-2.15.0.tar.xz|https://downloads.sourceforge.net/project/freetype/freetype2/2.15.0/freetype-2.15.0.tar.xz|93cd47eb719c325107f2d3cf087d06299e944c3b48a40b55537302304dea1dd5

@@ -29,7 +29,7 @@ DEPS="$BAR/deps"
 PREFIX="${STATIC_PREFIX:-$DEPS/static}"
 DL="$DEPS/static-src"
 WORK="$DEPS/static-build"
-TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 UPSTREAM_RECIPE="spring-static-libs@master (2026-03-24)"
 GCS_CACHE_BASE=https://storage.googleapis.com/recoil-linux-static-build-sources-17834
 

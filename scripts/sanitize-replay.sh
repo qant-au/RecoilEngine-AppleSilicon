@@ -26,7 +26,7 @@ case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space: $BAR" >&2
 cd "$BAR"
 DEMO=${1:?usage: sanitize-replay.sh <demo.sdfz> [replay-check.sh options...]}; shift
 [ -f "$DEMO" ] || { echo "FATAL: no such demo: $DEMO"; exit 1; }
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 MESA_PREFIX="${MESA_PREFIX:-$BAR/deps/mesa-native}"
 STATIC_PREFIX="$(scripts/build-static-libs.sh)" || exit 1
 SHARED_PREFIX="$(scripts/build-shared-libs.sh)" || exit 1

@@ -22,7 +22,7 @@ SDL2_VER="2.32.10"
 SDL2_SHA256="5f5993c530f084535c65a6879e9b26ad441169b3e25d789d83287040a9ca5165"
 PREFIX="$DEPS/sdl2-install"
 LIB="$PREFIX/lib/libSDL2-2.0.0.dylib"
-TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 
 # Always built here, even where Homebrew still ships a real SDL2: the bundle must
 # not depend on what a bottle happens to be.

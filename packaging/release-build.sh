@@ -26,7 +26,7 @@
 # --identity and --notary-profile are given.
 set -euo pipefail
 # One macOS floor for every binary and the Info.plist (see scripts/build-mesa-kk.sh).
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 # swiftc ignores MACOSX_DEPLOYMENT_TARGET and defaults to the BUILD host's macOS
 # (on 27.2 the helpers came out minos 27.2 against a 27.0 floor), so every bundled
 # Swift helper gets the target explicitly.

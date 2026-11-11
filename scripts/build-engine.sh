@@ -29,7 +29,7 @@ BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $
 case "$BAR" in *" "*) echo "FATAL: the checkout path contains a space, which the build flags and loops do not support: $BAR" >&2; exit 1;; esac
 # Deployment target: see build-mesa-kk.sh. Exported before build-mesa-kk.sh runs so
 # the driver and the engine always agree.
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 DEPS="$BAR/deps"
 SRC="${ENGINE_SRC:-$([ -d "$BAR/rts" ] && echo "$BAR" || echo "$BAR/engine")}"
 BUILD="${ENGINE_BUILD:-$BAR/build-engine}"

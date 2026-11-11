@@ -16,7 +16,7 @@ MIN_TESTS=30
 CREG_UPSTREAM_GAP='between drawSorted & blockPreciseCol'
 BAR="$(cd "$(dirname "$0")/.." && pwd)"   # always this checkout: an inherited $BAR is ignored
 cd "$BAR"
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-27.0}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 MESA_PREFIX="${MESA_PREFIX:-$BAR/deps/mesa-native}"
 STATIC_PREFIX="$(scripts/build-static-libs.sh)" || exit 1
 SHARED_PREFIX="$(scripts/build-shared-libs.sh)" || exit 1

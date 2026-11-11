@@ -48,7 +48,7 @@ has not been re-checked after a change to the thing it measures is stale.
 | VSync setting | SDL swap interval: off, on or adaptive | any non-zero value paces the render loop to the display (120.0 fps on a 120 Hz panel, no dropped frames); 0 runs unpaced (354 fps in the same scene, surplus frames dropped). On and adaptive behave the same: frames are never torn on this present path | **equivalent** | `rts/System/Platform/Mac/MetalPresent.mm` (`TakePresentSlot`); the log line `[EGL] VSync=N: frames paced to the display` |
 | `gl.BeginEnd` drawing from Lua | one GL call per vertex | each block drawn with one `glDrawArrays` (`LuaImmediateModeBuffering`, on by default on macOS only, off elsewhere as upstream); inside `gl.CreateList` the plain calls are recorded, as upstream | **equivalent** (same picture; setting 0 restores the upstream path) | `scripts/visreg.sh` |
 | Frame pacing / hitches | reference | `SPRING_HITCH_LOG` available; periodic hitches reported on M1 | **unverified** | issue #4 |
-| macOS floor | n/a | macOS 27.0, enforced on every bundled binary | n/a | `packaging/release-build.sh` deployment-target audit |
+| macOS floor | n/a | macOS 26.0, enforced on every bundled binary | n/a | `packaging/release-build.sh` deployment-target audit |
 | Signed, notarised releases | n/a | pipeline supports Developer ID + notarytool; no identity configured for this repository | **gap (decision)** | `make release` |
 
 ## Lua-Visible Differences From The Official Engine
