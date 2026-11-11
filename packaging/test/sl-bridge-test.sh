@@ -63,7 +63,8 @@ b = ctypes.create_string_buffer(4096)
 ctypes.CDLL('/usr/lib/libproc.dylib').proc_pidpath(os.getpid(), b, 4096)
 print(b.value.decode())")
 [ -x "$PYBIN" ] || { echo "FATAL: could not find the python executable path"; exit 1; }
-TMPDIR="$DTMP/" "$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine "$PYBIN" \
+mkdir -p "$WORK/bugreport"; echo "log" > "$WD/infolog.txt"; printf "%s\n" "XResolution = 1" "LobbyPassword = hunter2" > "$WD/springsettings.cfg"
+SL_BUGREPORT_DIR="$WORK/bugreport" SL_BUGREPORT_NO_REVEAL=1 TMPDIR="$DTMP/" "$WORK/sl-bridge" --writedir "$WD" --prd /usr/bin/false --engine "$PYBIN" \
   --engine-version 2026.07.04 --config "$WORK/extras.json" --online 0 \
   --parent-pid "$HOLDER" --log "$WORK/bridge.log" > "$WORK/out" &
 BPID=$!
@@ -291,7 +292,14 @@ R=$(send '{"name":"ParseMiniMap","command":{"mapPath":"x.sdz","destination":"../
 [ -z "$R" ] && ok "ParseMiniMap destination outside write dir refused" || no "ParseMiniMap traversal: $R"
 
 R=$(send '{"name":"UploadLog","command":{}}')
-echo "$R" | grep -q '"UploadLogFailed"' && echo "$R" | grep -q 'switched off' && ok "UploadLog refused while online play is off" || no "UploadLog: $R"
+BR=$(ls "$WORK"/bugreport/Accurona-bug-report-*.zip 2>/dev/null | head -1)
+# list and read the zip once: grep -q on a live unzip pipe trips pipefail
+BRLIST=$([ -n "$BR" ] && unzip -l "$BR" 2>/dev/null); BRCFG=$([ -n "$BR" ] && unzip -p "$BR" '*/springsettings.cfg' 2>/dev/null)
+echo "$R" | grep -q '"UploadLogFailed"' && echo "$R" | grep -q 'saved to' && [ -n "$BR" ] \
+  && echo "$BRLIST" | grep -q 'infolog' && echo "$BRLIST" | grep -q 'mac.txt' \
+  && ok "UploadLog while online play is off saves a bug report instead" || no "UploadLog offline: $R"
+[ -n "$BRCFG" ] && ! echo "$BRCFG" | grep -qi 'password' \
+  && ok "the bug report's settings carry no password line" || no "bug report settings: password line kept or file missing"
 
 send '{"name":"DiscordSetActivity","command":{"state":"In lobby","mapName":"Glacial Gap","playerCount":2,"maxPlayerCount":16,"partyId":42}}' > /dev/null
 python3 -c "

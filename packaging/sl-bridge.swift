@@ -577,6 +577,88 @@ func parseMiniMap(mapPath: String, dest: URL) -> Bool {
     return writeImage(rgba, side: MINIMAP_SIDE, to: dest)
 }
 
+// ---- bug-report bundle (UploadLog while online play is off) -----------------
+// The lobby's log upload, in a build that may not use BAR's servers, saves a
+// zip on the Desktop instead and shows it in Finder: the recent logs, last
+// week's ClientGameState files and crash reports, the settings file with any
+// password or token line removed, and a summary of the Mac. Nothing is sent
+// anywhere; the player attaches the file to an issue by hand.
+// SL_BUGREPORT_DIR overrides the Desktop (tests); SL_BUGREPORT_NO_REVEAL skips Finder.
+func saveBugReport(reply: @escaping (String, [String: Any]) -> Void) {
+    let fm = FileManager.default
+    let env = ProcessInfo.processInfo.environment
+    let weekAgo = Date().addingTimeInterval(-7 * 86400)
+    func recent(_ url: URL) -> Bool {
+        ((try? fm.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? .distantPast) > weekAgo
+    }
+    let fmt = DateFormatter(); fmt.locale = Locale(identifier: "en_US_POSIX"); fmt.dateFormat = "yyyyMMdd-HHmmss"
+    let stamp = fmt.string(from: Date())   // local time: the player reads this name
+    let name = "Accurona-bug-report-\(stamp)"
+    let staging = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(name)
+    try? fm.removeItem(at: staging)
+    guard (try? fm.createDirectory(at: staging, withIntermediateDirectories: true)) != nil else {
+        reply("UploadLogFailed", ["msg": "Could not prepare the bug report."]); return
+    }
+    defer { try? fm.removeItem(at: staging) }
+
+    var copied = 0
+    let names = (try? fm.contentsOfDirectory(atPath: writeDir.path)) ?? []
+    for n in names {
+        let src = writeDir.appendingPathComponent(n)
+        let wanted = n.hasPrefix("infolog") || n.hasSuffix(".log") || (n.hasPrefix("ClientGameState-") && recent(src))
+        if wanted, (try? fm.copyItem(at: src, to: staging.appendingPathComponent(n))) != nil { copied += 1 }
+    }
+    // crash reports macOS wrote for the engine this week
+    let reports = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports")
+    for n in (try? fm.contentsOfDirectory(atPath: reports.path)) ?? [] where n.lowercased().hasPrefix("spring") {
+        let src = reports.appendingPathComponent(n)
+        if recent(src), (try? fm.copyItem(at: src, to: staging.appendingPathComponent(n))) != nil { copied += 1 }
+    }
+    // the settings, without anything that looks like a secret
+    if let cfg = try? String(contentsOf: writeDir.appendingPathComponent("springsettings.cfg"), encoding: .utf8) {
+        let kept = cfg.split(separator: "\n", omittingEmptySubsequences: false).filter { line in
+            let l = line.lowercased(); return !(l.contains("password") || l.contains("token") || l.contains("secret"))
+        }
+        try? kept.joined(separator: "\n").write(to: staging.appendingPathComponent("springsettings.cfg"), atomically: true, encoding: .utf8)
+    }
+    guard copied > 0 else {
+        reply("UploadLogFailed", ["msg": "No logs found in \(writeDir.path)"]); return
+    }
+    func run(_ path: String, _ args: [String]) -> String {
+        let p = Process(); let pipe = Pipe()
+        p.executableURL = URL(fileURLWithPath: path); p.arguments = args
+        p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return "" }
+        let out = pipe.fileHandleForReading.readDataToEndOfFile(); p.waitUntilExit()
+        return String(data: out, encoding: .utf8) ?? ""
+    }
+    let app = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+    let info = Bundle(url: app)?.infoDictionary ?? [:]
+    let summary = """
+        Accurona \(info["CFBundleShortVersionString"] as? String ?? "?") (engine \(engineVersion.isEmpty ? "?" : engineVersion))
+        macOS \(ProcessInfo.processInfo.operatingSystemVersionString)
+        \(run("/usr/sbin/sysctl", ["-n", "hw.model", "machdep.cpu.brand_string", "hw.memsize"]))
+        \(run("/usr/sbin/system_profiler", ["SPDisplaysDataType"]))
+        """
+    try? summary.write(to: staging.appendingPathComponent("mac.txt"), atomically: true, encoding: .utf8)
+
+    let destDir = env["SL_BUGREPORT_DIR"].map { URL(fileURLWithPath: $0) }
+        ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+    let zipURL = destDir.appendingPathComponent(name + ".zip")
+    let z = Process()
+    z.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+    z.arguments = ["-c", "-k", "--keepParent", staging.path, zipURL.path]
+    do { try z.run(); z.waitUntilExit() } catch {}
+    guard z.terminationStatus == 0, fm.fileExists(atPath: zipURL.path) else {
+        reply("UploadLogFailed", ["msg": "Could not save the bug report."]); return
+    }
+    log("UploadLog (offline): bug report saved to \(zipURL.path), \(copied) log file(s)")
+    if env["SL_BUGREPORT_NO_REVEAL"] == nil {
+        _ = run("/usr/bin/open", ["-R", zipURL.path])
+    }
+    reply("UploadLogFailed", ["msg": "Online log upload is off in this build, so your logs were saved to \(zipURL.path) and shown in Finder. Please attach that file to a report at https://github.com/qant-au/RecoilEngine-AppleSilicon/issues"])
+}
+
 // ---- log upload (UploadLog) --------------------------------------------------
 // As spring-launcher's log_uploader: zip the recent logs plus last week's
 // ClientGameState files and PUT them to <log_upload_url>/<name>.zip; the server
@@ -585,7 +667,8 @@ func parseMiniMap(mapPath: String, dest: URL) -> Bool {
 // public notice asks players not to report port problems to them.
 func uploadLog(reply: @escaping (String, [String: Any]) -> Void) {
     guard onlineEnabled else {
-        reply("UploadLogFailed", ["msg": "Log upload is switched off in this build. Your logs are in \(writeDir.path) (infolog.txt). Please report problems at https://github.com/qant-au/RecoilEngine-AppleSilicon/issues"])
+        // nothing leaves the machine: the bundle is saved for the player to attach by hand
+        saveBugReport(reply: reply)
         return
     }
     guard let base = extras["log_upload_url"] as? String, let baseURL = URL(string: base), baseURL.scheme == "https" else {
