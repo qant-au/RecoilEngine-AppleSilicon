@@ -86,13 +86,17 @@ if driver_present && [ "$FORCE" != "1" ]; then
 fi
 
 echo "=== [1/4] Homebrew dependencies ==="
-# Engine deps + Mesa build deps. Individually so one failure doesn't kill the rest.
-# cmake/ninja: SPIRV-LLVM-Translator below and the engine build. gcc@15:
-# gcc-dbl64-swap.sh. coreutils: gtimeout for build-engine.sh's libm gate.
-for pkg in sdl2 libpng libjpeg-turbo libogg libvorbis freetype glm libomp \
-           vulkan-headers vulkan-loader molten-vk devil ccache \
+# Build tools and the libraries not built from source here. Individually so
+# one failure doesn't kill the rest. SDL2, libpng, libjpeg-turbo, libogg,
+# libvorbis, FreeType, DevIL, OpenAL Soft and minizip are built from pinned
+# source (build-static-libs.sh, build-shared-libs.sh, build-sdl2.sh), so they
+# are not installed. cmake/ninja: SPIRV-LLVM-Translator below and the engine
+# build. gcc@15: gcc-dbl64-swap.sh. coreutils: gtimeout for build-engine.sh's
+# libm gate.
+for pkg in glm libomp \
+           vulkan-headers vulkan-loader molten-vk ccache \
            meson pkg-config bison flex llvm@19 libclc glslang spirv-tools \
-           p7zip openal-soft minizip cmake ninja gcc@15 coreutils; do
+           p7zip cmake ninja gcc@15 coreutils; do
   brew list "$pkg" &>/dev/null || brew install "$pkg" || echo "WARN: brew install $pkg failed"
 done
 
