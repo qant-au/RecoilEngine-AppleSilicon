@@ -76,6 +76,12 @@ CONFIG(int, MouseDragCircleCommandThreshold).defaultValue(4).description("Distan
 CONFIG(int, MouseDragBoxCommandThreshold).defaultValue(16).description("Distance in pixels which the mouse must be dragged to trigger a rectangular area command.");
 CONFIG(int, MouseDragFrontCommandThreshold).defaultValue(30).description("Distance in pixels which the mouse must be dragged to trigger a formation front command.");
 CONFIG(float, MacSwipePanSpeed).defaultValue(1.0f).minimumValue(0.0f).description("macOS only: map pan speed for Shift + swipe on a Magic Mouse or trackpad. 0 turns the pan off, and Shift + swipe zooms fast as on other platforms.");
+CONFIG(bool, MacTrackpadEnabled).defaultValue(false).description("macOS only: trackpad camera gestures. Two-finger scroll pans the map, pinch zooms, Option + two-finger scroll tilts. Over the interface, two-finger scroll still scrolls it. Mouse wheels are unchanged.");
+CONFIG(float, MacTrackpadPanSpeed).defaultValue(1.0f).minimumValue(0.05f).maximumValue(10.0f).description("macOS only: map pan speed for MacTrackpadEnabled.");
+CONFIG(float, MacTrackpadZoomSpeed).defaultValue(1.0f).minimumValue(0.05f).maximumValue(10.0f).description("macOS only: pinch zoom speed for MacTrackpadEnabled.");
+CONFIG(float, MacTrackpadTiltSpeed).defaultValue(1.0f).minimumValue(0.05f).maximumValue(10.0f).description("macOS only: Option + two-finger tilt speed for MacTrackpadEnabled.");
+CONFIG(bool, MacTrackpadInvertPan).defaultValue(false).description("macOS only: pan the camera with the fingers instead of dragging the map.");
+CONFIG(bool, MacTrackpadMomentum).defaultValue(false).description("macOS only: let a map pan coast on after the fingers lift (trackpad momentum). Interface scrolling always keeps it.");
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -240,6 +246,9 @@ void CMouseHandler::WindowLeave()
 {
 	RECOIL_DETAILED_TRACY_ZONE;
 	offscreen = true;
+#if defined(__APPLE__)
+	std::fill(std::begin(trackpadRoutes), std::end(trackpadRoutes), 0);
+#endif
 
 	const int2 viewMouseCenter = GetViewMouseCenter();
 
@@ -687,6 +696,73 @@ bool CMouseHandler::SwipePan(float dx, float dy)
 	unitTracker.Disable();
 	camHandler->GetCurrentController().KeyMove(float3(-dx * PX * speed, dy * PX * speed, 1.0f));
 	return true;
+}
+
+void CMouseHandler::TrackpadGesture(int action, float x, float y, bool begin, bool end, bool momentum, bool natural)
+{
+	// action: 0 pan, 1 pinch, 2 tilt (MacTrackpad::Action). x, y: finger
+	// movement in points (x right, y down); for a pinch, y is the magnification.
+	// Each gesture picks its route when it begins and keeps it to the end, so
+	// a pan that starts over the map does not start scrolling a panel it
+	// passes, and the momentum tail goes where the gesture went.
+	enum { ROUTE_NONE = 0, ROUTE_CAMERA = 1, ROUTE_UI = 2, ROUTE_BLOCKED = 3 };
+	if (action < 0 || action > 2)
+		return;
+
+	int& route = trackpadRoutes[action];
+	if (begin || route == ROUTE_NONE) {
+		if (!globalRendering->active || offscreen || ButtonPressed() || locked) {
+			route = ROUTE_BLOCKED;
+		} else if (game == nullptr || activeController != game || CInputReceiver::GetReceiverAt(lastx, lasty) != nullptr) {
+			route = ROUTE_UI;
+		} else {
+			route = ROUTE_CAMERA;
+		}
+	}
+
+	if (route == ROUTE_UI && action == 0 && y != 0.0f) {
+		// an interface scroll, as the wheel event SDL would have sent: about
+		// 10 points per line, and in the direction the user scrolls
+		const float delta = (natural ? y : -y) * 0.1f;
+		if (!RmlGui::ProcessMouseWheel(delta) && !eventHandler.MouseWheel(delta > 0.0f, delta) &&
+			miniMapMouseWheel && minimap != nullptr && minimap->IsInside(lastx, lasty))
+			minimap->MouseWheel(delta > 0.0f, delta);
+	} else if (route == ROUTE_CAMERA && (x != 0.0f || y != 0.0f) && camHandler != nullptr &&
+		(!momentum || configHandler->GetBool("MacTrackpadMomentum"))) {
+		auto& controller = camHandler->GetCurrentController();
+		CCamera* cam = camHandler->GetActiveCamera();
+		const bool rotate = cam->GetMovState()[CCamera::MOVE_STATE_RTT];
+		const bool tilt = cam->GetMovState()[CCamera::MOVE_STATE_TLT];
+		const bool reset = cam->GetMovState()[CCamera::MOVE_STATE_RST];
+		// a held modifier must not turn a pinch into a tilt or a reset
+		cam->SetMovState(CCamera::MOVE_STATE_RTT, false);
+		cam->SetMovState(CCamera::MOVE_STATE_TLT, action == 2);
+		cam->SetMovState(CCamera::MOVE_STATE_RST, false);
+
+		if (action == 0) {
+			// the map follows the fingers, as SwipePan; one point is about one screen pixel
+			constexpr float PX = 1.0f / 400.0f;
+			const float speed = configHandler->GetFloat("MacTrackpadPanSpeed") * (configHandler->GetBool("MacTrackpadInvertPan") ? -1.0f : 1.0f);
+			controller.KeyMove(float3(-x * PX * speed, y * PX * speed, 1.0f));
+		} else if (action == 1) {
+			// magnification > 0 spreads the fingers: zoom in towards the pointer
+			const float scale = std::clamp(1.0f + y * configHandler->GetFloat("MacTrackpadZoomSpeed"), 0.5f, 2.0f);
+			controller.MouseWheelMove((1.0f / scale - 1.0f) / 0.007f, dir);
+		} else {
+			controller.MouseWheelMove(-y * configHandler->GetFloat("MacTrackpadTiltSpeed"), dir);
+		}
+
+		cam->SetMovState(CCamera::MOVE_STATE_RTT, rotate);
+		cam->SetMovState(CCamera::MOVE_STATE_TLT, tilt);
+		cam->SetMovState(CCamera::MOVE_STATE_RST, reset);
+		unitTracker.Disable();
+	}
+
+	// a pan keeps its route through phase=Ended until its momentum ends
+	if (end && action != 0)
+		route = ROUTE_NONE;
+	if (end && action == 0 && momentum)
+		route = ROUTE_NONE;
 }
 #endif
 

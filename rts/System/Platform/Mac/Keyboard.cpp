@@ -1,6 +1,7 @@
 /* This file is part of the Spring engine (GPL v2 or later), see LICENSE.html */
 
 #include "Keyboard.h"
+#include "Trackpad.h"
 
 #include <algorithm>
 #include <array>
@@ -130,6 +131,9 @@ static void SendEvent(id self, SEL sel, id event)
 	const unsigned long type = Send<unsigned long>(event, "type");
 
 	if (type != NSEventTypeKeyDown && type != NSEventTypeKeyUp) {
+		// trackpad gestures (MacTrackpadEnabled) are taken here, before SDL sees them
+		if (MacTrackpad::HandleNativeEvent(event))
+			return;
 		sdlSendEvent(self, sel, event);
 		return;
 	}

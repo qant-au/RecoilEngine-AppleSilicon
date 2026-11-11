@@ -201,6 +201,10 @@ Keys the layer adds. Those marked macOS exist on macOS only.
 | `MacPresentDirect` (macOS) | 1 | The present shader reads the readback ring directly from unified memory; 0 uses the IOSurface staging path. |
 | `MacWorkerQos` (macOS) | 1 | Thread-pool workers ask for the user-initiated quality-of-service class, which prefers the performance cores. |
 | `MacSwipePanSpeed` (macOS) | 1.0 | Map pan speed for Shift + swipe on a Magic Mouse or trackpad. 0 turns the pan off. |
+| `MacTrackpadEnabled` (macOS) | 0 | Trackpad camera gestures: two-finger scroll pans the map, pinch zooms, Option + two-finger scroll tilts. Over the interface, two-finger scroll still scrolls it; mouse wheels are unchanged. |
+| `MacTrackpadPanSpeed`, `MacTrackpadZoomSpeed`, `MacTrackpadTiltSpeed` (macOS) | 1.0 | Speeds for the gestures above, 0.05 to 10. |
+| `MacTrackpadInvertPan` (macOS) | 0 | 1 moves the camera with the fingers instead of dragging the map. |
+| `MacTrackpadMomentum` (macOS) | 0 | 1 lets a map pan coast on after the fingers lift. Interface scrolling always keeps it. |
 | `LuaImmediateModeBuffering` | 1 on macOS, 0 elsewhere | Draw each `gl.BeginEnd` block with one `glDrawArrays` instead of one call per vertex. |
 | `GPUTimers` | 0 | Time the GPU per render pass and expose the results as `GPU::*` profiler zones. |
 | `GPUTimersSplitPasses` | 0 | Force a render-pass boundary at every GPU timer stamp. Needed on tile-based GPUs to attribute time per pass; costs extra loads and stores. |

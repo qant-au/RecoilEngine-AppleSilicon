@@ -54,6 +54,8 @@ public:
 	void MouseWheel(float delta);
 #if defined(__APPLE__)
 	bool SwipePan(float dx, float dy);
+	// MacTrackpadEnabled gestures (System/Platform/Mac/Trackpad.h)
+	void TrackpadGesture(int action, float x, float y, bool begin, bool end, bool momentum, bool natural);
 #endif
 
 	// input emulation (debug.emulateMouse*): a button held independent of hardware.
@@ -130,6 +132,10 @@ public:
 	/// so we can restore it when we return to normal control
 	bool wasLocked = false;
 	bool offscreen = false;
+#if defined(__APPLE__)
+	// where each trackpad gesture goes: 0 not chosen, 1 camera, 2 interface, 3 nowhere
+	int trackpadRoutes[3] = {};
+#endif
 	bool mmbScroll = false;
 	uint32_t pressedBitMask = 0;
 

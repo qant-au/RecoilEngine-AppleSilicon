@@ -15,6 +15,8 @@
 
 #ifdef __APPLE__
 #include "System/Platform/Mac/Keyboard.h"
+#include "System/Platform/Mac/Trackpad.h"
+#include "System/Config/ConfigHandler.h"
 #endif
 
 InputHandler input;
@@ -193,6 +195,12 @@ void InputHandler::PushEvents()
 #endif
 
 	SDL_Event event;
+
+#ifdef __APPLE__
+	// read each pump, so the setting applies the moment it changes
+	if (configHandler != nullptr)
+		MacTrackpad::SetEnabled(configHandler->GetBool("MacTrackpadEnabled"));
+#endif
 
 	while (SDL_PollEvent(&event)) {
 		// SDL_PollEvent may modify FPU flags

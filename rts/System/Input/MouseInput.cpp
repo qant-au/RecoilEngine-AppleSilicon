@@ -37,6 +37,10 @@
 #include <SDL_syswm.h>
 #include <SDL_version.h>
 #include <SDL_touch.h>
+
+#ifdef __APPLE__
+#include "System/Platform/Mac/Trackpad.h"
+#endif
 #ifdef __APPLE__
 #include <SDL_video.h>
 #endif
@@ -165,6 +169,15 @@ static float ScaleMouseDelta(float d, int sdlSize, int viewSize)
 
 bool IMouseInput::HandleSDLMouseEvent(const SDL_Event& event)
 {
+#ifdef __APPLE__
+	MacTrackpad::Gesture gesture;
+	if (MacTrackpad::GetGesture(event, gesture)) {
+		if (mouse != nullptr && gesture.windowID == SDL_GetWindowID(globalRendering->GetWindow()))
+			mouse->TrackpadGesture(static_cast<int>(gesture.action), gesture.x, gesture.y, gesture.begin, gesture.end, gesture.momentum, gesture.natural);
+		return false;
+	}
+#endif
+
 	switch (event.type) {
 		case SDL_MOUSEMOTION: {
 #ifdef __APPLE__

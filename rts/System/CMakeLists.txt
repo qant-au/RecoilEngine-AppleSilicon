@@ -147,6 +147,7 @@ set(sources_engine_System_Platform_Mac
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/WindowManagerHelper.cpp"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/MetalPresent.mm"
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/Keyboard.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/Trackpad.cpp"
 	)
 set(sources_engine_System_Platform_Windows
 		"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Win/CrashHandler.cpp"
