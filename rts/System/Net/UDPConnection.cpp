@@ -824,6 +824,7 @@ std::string UDPConnection::Statistics() const
 		"\t%u incoming chunks dropped, %u outgoing chunks resent\n",
 		"\t%u incoming chunks processed\n",
 		"\t%u outgoing packets dropped on a full send buffer\n",
+		"\t%u sends retried after a full send buffer, %u of them sent\n",
 	};
 
 	std::string msg = "[UDPConnection::Statistics]\n";
@@ -833,6 +834,7 @@ std::string UDPConnection::Statistics() const
 	msg += spring::format(fmts[3], droppedChunks, resentChunks);
 	msg += spring::format(fmts[4], lastInOrder + 1);
 	msg += spring::format(fmts[5], droppedSends);
+	msg += spring::format(fmts[6], retriedSends, retriedSendsSent);
 	return msg;
 }
 
@@ -1080,6 +1082,7 @@ void UDPConnection::SendPacket(Packet& pkt)
 		// once per flush pass, so a flush with multiple packets doesn't wait multiple times
 		if (err && (err.value() == asio::error::try_again || err.value() == asio::error::would_block) && !drainWaited) {
 			drainWaited = true;
+			retriedSends += 1;
 			/* Balance between too many resends (lower)
 			 * and main thread stalls (higher) */ 
 			constexpr int drainWaitMs = 5;
@@ -1094,6 +1097,8 @@ void UDPConnection::SendPacket(Packet& pkt)
 				err.clear();
 				mySocket->send_to(buffer(sendBuffer), addr, flags, err);
 			}
+			if (!err)
+				retriedSendsSent += 1;
 		}
 	}
 

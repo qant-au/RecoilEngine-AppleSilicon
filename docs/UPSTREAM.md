@@ -61,7 +61,14 @@ Found while working on the layer, to report rather than to patch:
   driver that runs GL on a worker thread such a read forces a
   synchronisation. Left as their authors wrote it.
 - #3293 retries a send on `try_again`, which Windows never returns for a full
-  send buffer (`would_block` there). Fixed in this tree.
+  send buffer (`would_block` there). Fixed in this tree, and checked on Windows
+  11 on 2026-11-11 with `test/engine/System/Net/TestUDPSendBuffer.cpp`: a
+  1-byte send buffer sending over Wi-Fi gave WSAEWOULDBLOCK (10035, while
+  `try_again` is 1237) on 199,891 of 200,000 raw sends; through
+  `UDPConnection` the retry ran once per flush (400 times, 399 then sent) and
+  15,599 drops were counted. To the same machine Windows completes every send
+  whatever the buffer size, so the test needs `UDP_SENDBUF_TARGET=<ip>:<port>`
+  pointing at another host to fill a buffer.
 - #3533 reads GL state while a display list is being compiled. In this tree
   the plain calls are recorded inside `gl.CreateList`.
 - #3566: the decompression buffer was sized from unchecked header

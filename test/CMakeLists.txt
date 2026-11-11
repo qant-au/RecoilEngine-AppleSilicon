@@ -130,6 +130,33 @@ if(NOT DEFINED ENV{CI})
 endif()
 
 ################################################################################
+### UDPSendBuffer: a full send buffer, the would_block retry and the drop count
+if(NOT DEFINED ENV{CI})
+	set(test_name UDPSendBuffer)
+	set(test_src
+		"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/Net/TestUDPSendBuffer.cpp"
+		"${ENGINE_SOURCE_DIR}/Game/GameVersion.cpp"
+		"${ENGINE_SOURCE_DIR}/Net/Protocol/BaseNetProtocol.cpp"
+		"${ENGINE_SOURCE_DIR}/System/CRC.cpp"
+		"${ENGINE_SOURCE_DIR}/System/Misc/SpringTime.cpp"
+		"${ENGINE_SOURCE_DIR}/System/Net/UDPConnection.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/NullGlobalConfig.cpp"
+		"${CMAKE_CURRENT_SOURCE_DIR}/engine/System/Nullerrorhandler.cpp"
+		${sources_engine_System_Threading}
+		${test_Common_sources}
+	)
+	set(test_libs
+		engineSystemNet
+		${REALTIME_LIBRARY}
+		${WINMM_LIBRARY}
+		${WS2_32_LIBRARY}
+		7zip
+	)
+	add_spring_test(${test_name} "${test_src}" "${test_libs}" "")
+	add_dependencies(test_UDPSendBuffer generateVersionFiles)
+endif()
+
+################################################################################
 ### ILog
 	set(test_name ILog)
 	set(test_src

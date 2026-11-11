@@ -244,6 +244,9 @@ private:
 	unsigned int sentOverhead, recvOverhead;
 	unsigned int sentPackets, recvPackets;
 	unsigned int droppedSends = 0;
+	/// sends that hit a full send buffer and were tried again, and how many of those went out
+	unsigned int retriedSends = 0;
+	unsigned int retriedSendsSent = 0;
 	bool drainWaited = false;
 
 	class BandwidthUsage {
