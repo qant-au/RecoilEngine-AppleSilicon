@@ -228,6 +228,11 @@ This port stands on a lot of prior work, gratefully:
     GLSL/NPOT reporting (#3615) and the screenshot deadlock fix (#3631).
   - **[TonyTheCat](https://github.com/TonyTheCat)**: the mouse-cursor texture leak
     ([RecoilEngine#3687](https://github.com/beyond-all-reason/RecoilEngine/issues/3687)).
+  - **[smallketchup82](https://github.com/smallketchup82)**: the Apple arm64
+    native calls in CircuitAI's bundled AngelScript, which let the Zero-K AI
+    start on Apple Silicon, from his
+    [ZkMacOS](https://github.com/smallketchup82/ZkMacOS) port; his commit,
+    authorship kept, on this project's CircuitAI fork.
   - **[Anatolii / Dimaris-nsk](https://github.com/Dimaris-nsk)**: Spring camera
     for fresh profiles, rotatable-camera scroll speed, content install failure
     classification, safer rapid backups, and finding the missing

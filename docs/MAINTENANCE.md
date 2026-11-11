@@ -111,7 +111,7 @@ The Engine Notice).
 |---|---|---|
 | `tools/pr-downloader` | `qant-au/pr-downloader`, branch `macos-<engine>` | one commit on upstream's pin: HTTP/1.1 for BAR's content network on macOS |
 | `AI/Skirmish/BARb` | none: upstream's commit and address, as in the engine tag | none |
-| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI`, branch `macos-arm64-zk-<engine>` | one commit on upstream's pin: the AngelScript arm64 assembly file in CMake and its labels for the Apple assembler |
+| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI`, branch `macos-arm64-native-calls-zk-<engine>` | one commit on upstream's pin, by smallketchup82 (authorship kept): AngelScript native calls on Apple arm64, its assembly file in CMake, and the Apple assembler labels |
 
 The forks must stay public at the commits a release was built from: they are
 part of the corresponding source. The exact commits are in

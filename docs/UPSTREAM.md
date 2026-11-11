@@ -74,10 +74,11 @@ Found while working on the layer, to report rather than to patch:
 - #3566: the decompression buffer was sized from unchecked header
   dimensions. Bounded in this tree.
 
-- CircuitAI's `zk` branch bundles an AngelScript that has no native calling
-  convention for Apple arm64, so the AI library builds but aborts when it
-  registers its first function. BARb's newer AngelScript is fine. This is for
-  the CircuitAI project, not for Recoil.
+- CircuitAI's `zk` branch bundles an AngelScript (2.36) that has no native
+  calling convention for Apple arm64, so the AI library builds but aborts when
+  it registers its first function. BARb's newer AngelScript is fine. This is
+  for the CircuitAI project, not for Recoil. Fixed in this tree with [smallketchup82](https://github.com/smallketchup82)'s Apple arm64 AngelScript native calls (from [ZkMacOS](https://github.com/smallketchup82/ZkMacOS)),
+  2026-11-11; it is his to offer upstream.
 - On SIGTERM the engine's forced exit runs `exit()` off the main thread, and
   an AI library's static destructors then abort on threads that are still
   joinable. This is the cause behind the `pr/extthreads-joinable-exit` branch.
@@ -164,7 +165,7 @@ contribution.
 |---|---|---|---|
 | `tools/pr-downloader` | `qant-au/pr-downloader` | one commit: HTTP/1.1 for BAR's content network on macOS | not offered yet |
 | `AI/Skirmish/BARb` | none: upstream's commit | nothing. The fork's one commit was redundant (upstream CircuitAI #140) and was dropped on 2026-11-10 | not applicable |
-| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI` | one commit on upstream's `zk` pin: the AngelScript arm64 assembly file in CMake and its labels for the Apple assembler | not offered yet |
+| `AI/Skirmish/CircuitAI` | `qant-au/CircuitAI` | one commit on upstream's `zk` pin, by smallketchup82: AngelScript native calls on Apple arm64 (replaced our build-only commit `ddfc8c3c` on 2026-11-11) | his to offer |
 
 ## Mesa Patches
 

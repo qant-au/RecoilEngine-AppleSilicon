@@ -12,7 +12,7 @@
 [submodule "AI/Skirmish/CircuitAI"]
 	path = AI/Skirmish/CircuitAI
 	url = https://github.com/qant-au/CircuitAI.git
-	branch = macos-arm64-zk-2026.09.02
+	branch = macos-arm64-native-calls-zk-2026.09.02
 [submodule "rts/lib/tracy"]
 	path = rts/lib/tracy
 	url = https://github.com/wolfpld/tracy.git
