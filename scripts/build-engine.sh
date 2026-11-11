@@ -40,6 +40,8 @@ BUILD="${ENGINE_BUILD:-$BAR/build-engine}"
 [ -n "${MESA_PREFIX:-}" ] && MESA_PREFIX_EXPLICIT=1 || MESA_PREFIX_EXPLICIT=""
 MESA_PREFIX="${MESA_PREFIX:-$DEPS/mesa-native}"
 MESA_LIBEGL="$MESA_PREFIX/lib/libEGL.dylib"
+# Homebrew build tools first: on a fresh Mac nothing below can run without them.
+"$BAR/scripts/install-build-deps.sh"
 # Ensure the graphics driver exists before building — so a single command builds
 # the whole stack. build-mesa-kk.sh is a no-op when the driver is already current
 # (provenance stamp), and never clobbers an unstamped pre-existing driver.
