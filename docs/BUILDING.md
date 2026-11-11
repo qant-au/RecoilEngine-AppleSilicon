@@ -10,10 +10,12 @@ are in [VERSIONS.md](VERSIONS.md).
 - An Apple Silicon Mac on the macOS floor in [VERSIONS.md](VERSIONS.md) or
   later.
 - Xcode Command Line Tools (`xcode-select --install`).
-- [Homebrew](https://brew.sh). The first build installs the packages it needs
-  (`scripts/build-mesa-kk.sh` lists them: cmake, ninja, meson, LLVM 19,
-  gcc 15, coreutils and others). Everything the app ships is built from
-  pinned source under `deps/`; nothing in a bundle comes from Homebrew.
+- [Homebrew](https://brew.sh). The first build installs the build tools it
+  needs before anything else (`scripts/install-build-deps.sh` lists them:
+  cmake, ninja, meson, LLVM 19, gcc 15, coreutils and others). Everything the
+  app ships is built from pinned source under `deps/`; nothing in a bundle
+  comes from Homebrew. Checked on 2026-11-11 on a Mac with no Homebrew
+  packages: `make app` passed with only those tools installed.
 - A full clone with submodules, and upstream's tags. The build reads the
   engine version from the nearest upstream release tag and stops without one:
 
