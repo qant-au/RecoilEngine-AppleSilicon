@@ -219,6 +219,7 @@ if     (APPLE)
 			${sources_engine_System}
 			${sources_engine_System_Platform_Mac}
 			"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/MacPresentBackend.mm"
+			"${CMAKE_CURRENT_SOURCE_DIR}/Platform/Mac/CrispInterface.cpp"
 			${sources_engine_System_Threading}
 		)
 elseif (UNIX)

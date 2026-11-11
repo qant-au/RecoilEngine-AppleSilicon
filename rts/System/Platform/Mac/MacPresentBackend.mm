@@ -24,6 +24,7 @@
 #include <unistd.h> // getpagesize (direct-present ring alignment)
 
 #include "MetalPresent.h"
+#include "CrispInterface.h"
 // glad directly, not Rendering/GL/myGL.h: myGL pulls the engine math stack
 // (float3 -> SpringMath -> streflop/sse2neon), which is neither needed here
 // nor compatible with this Objective-C++ TU
@@ -46,6 +47,7 @@
 
 CONFIG(int, MacPresentDirect).defaultValue(1).minimumValue(0).maximumValue(1).description("macOS: present shader reads the readback ring directly from unified memory (0 = IOSurface staging path). Runtime-changeable so perf A/B legs can share one seeked process.");
 CONFIG(float, MacRenderScale).defaultValue(1.0f).minimumValue(0.5f).maximumValue(1.0f).description("macOS: fraction of the window's pixel resolution the game renders at (0.5-1.0). Below 1.0 the frame is upscaled to the window at present time (see MacUpscaler). Lower = faster readback and rendering. Applied at startup and on window resize.");
+CONFIG(bool, MacCrispInterface).defaultValue(false).description("macOS: with MacRenderScale below 1, draw the interface and text at the window's full resolution; only the 3D world renders at MacRenderScale and is stretched to the window (plain smooth scaling, no MetalFX). Requires restart.");
 CONFIG(int, MacUpscaler).defaultValue(1).minimumValue(0).maximumValue(1).description("macOS: how a frame rendered below window resolution is upscaled. 0 = plain stretch, 1 = MetalFX spatial upscaler (falls back to plain stretch if unavailable). Runtime-changeable.");
 
 // A truly zero-copy present (render the engine FBO directly into the
@@ -65,6 +67,8 @@ EGLConfig  eglCfg = nullptr;  // saved so the pbuffer can be recreated on resize
 void*      metalLayer = nullptr; // CAMetalLayer attached to the window's NSView
 int        pbufW = 1280;         // pbuffer (default framebuffer) dimensions
 int        pbufH = 720;
+int        engW = 1280;          // what the engine renders at: the pbuffer size, or
+int        engH = 720;           // with MacCrispInterface the MacRenderScale size
 std::vector<unsigned char> presentBuf; // reused glReadPixels staging buffer
 
 // BENCHMARK PIN (perf-test only): SPRING_MAC_PERF_RENDER_SIZE=<W>x<H> forces
@@ -427,10 +431,22 @@ bool CreateContext(SDL_Window* window)
 	// follow this automatically and stay consistent.
 	const bool perfSize = PerfPinnedRenderSize(pxW, pxH);
 
-	pbufW = pxW;
-	pbufH = pxH;
+	// MacCrispInterface: the engine keeps the MacRenderScale size, the pbuffer
+	// (where the interface is drawn) the window's full size. A benchmark pin
+	// fixes one size for everything, so it turns the mode off.
+	const double rs = std::clamp(double(configHandler->GetFloat("MacRenderScale")), 0.5, 1.0);
+	const bool crisp = configHandler->GetBool("MacCrispInterface") && rs < 1.0 && !perfSize && !noRetina;
+	MacCrisp::Configure(crisp);
+	renderScaled.store(rs < 1.0 && !crisp, std::memory_order_relaxed);
+	ApplyUpscaler();
+
+	engW = pxW;
+	engH = pxH;
+	pbufW = crisp ? std::max(pxW, int(std::lround(double(winW) * bsf / rs))) : pxW;
+	pbufH = crisp ? std::max(pxH, int(std::lround(double(winH) * bsf / rs))) : pxH;
+	MacCrisp::SetSizes(engW, engH, pbufW, pbufH);
 	LOG("[EGL] window %dx%d pts * %.2f scale -> pbuffer %dx%d px%s%s",
-			winW, winH, bsf, pxW, pxH,
+			winW, winH, bsf, pbufW, pbufH,
 			noRetina ? " (SPRING_MAC_NO_RETINA=1)" : "",
 			perfSize ? " (SPRING_MAC_PERF_RENDER_SIZE - hardware-independent)" : "");
 	if (noRetina)
@@ -605,15 +621,21 @@ void* GetGLContext()
 	return (void*)eglCtx;
 }
 
+static void* CrispLoadProc(const char* name)
+{
+	return MacCrisp::WrapProc(name, reinterpret_cast<void*>(eglGetProcAddress(name)));
+}
+
 LoadProc GetGLLoadProc()
 {
-	return (LoadProc)&eglGetProcAddress;
+	// with MacCrispInterface a handful of calls are wrapped (CrispInterface.cpp)
+	return MacCrisp::Enabled() ? &CrispLoadProc : (LoadProc)&eglGetProcAddress;
 }
 
 void GetDrawableSize(int& w, int& h)
 {
-	w = pbufW;
-	h = pbufH;
+	w = engW;
+	h = engH;
 }
 
 // Effective render scale = NSWindow.backingScaleFactor with two
@@ -653,7 +675,8 @@ double EffectiveBackingScale(SDL_Window* window)
 		return hw;
 
 	const double rs = std::clamp(double(configHandler->GetFloat("MacRenderScale")), 0.5, 1.0);
-	renderScaled.store(rs < 1.0, std::memory_order_relaxed);
+	// with MacCrispInterface the pbuffer matches the window: nothing to upscale
+	renderScaled.store(rs < 1.0 && !MacCrisp::Enabled(), std::memory_order_relaxed);
 	ApplyUpscaler();
 	if (rs < 1.0) {
 		static double loggedRs = -1.0;
@@ -750,11 +773,19 @@ void ResizeIfNeeded(SDL_Window* window)
 	}
 
 	const double bsf = EffectiveBackingScale(window);
-	const int    pxW = std::max(1, int(std::lround(double(winW) * bsf)));
-	const int    pxH = std::max(1, int(std::lround(double(winH) * bsf)));
+	const int    enW = std::max(1, int(std::lround(double(winW) * bsf)));
+	const int    enH = std::max(1, int(std::lround(double(winH) * bsf)));
+	// MacCrispInterface: the pbuffer stays at the window's full size
+	const double rs  = std::clamp(double(configHandler->GetFloat("MacRenderScale")), 0.5, 1.0);
+	const int    pxW = MacCrisp::Enabled() ? std::max(enW, int(std::lround(double(winW) * bsf / rs))) : enW;
+	const int    pxH = MacCrisp::Enabled() ? std::max(enH, int(std::lround(double(winH) * bsf / rs))) : enH;
 
-	if (pxW == pbufW && pxH == pbufH)
-		return; // size unchanged
+	if (pxW == pbufW && pxH == pbufH) {
+		engW = enW;
+		engH = enH;
+		MacCrisp::SetSizes(engW, engH, pbufW, pbufH);
+		return; // pbuffer size unchanged
+	}
 
 	EGLint pbAttribs[] = { EGL_WIDTH, pxW, EGL_HEIGHT, pxH, EGL_NONE };
 	EGLSurface newSurface = eglCreatePbufferSurface(eglDpy, eglCfg, pbAttribs);
@@ -776,6 +807,9 @@ void ResizeIfNeeded(SDL_Window* window)
 	eglSfc = newSurface;
 	pbufW = pxW;
 	pbufH = pxH;
+	engW = enW;
+	engH = enH;
+	MacCrisp::SetSizes(engW, engH, pbufW, pbufH);
 	LOG("[EGL] resize: pbuffer -> %dx%d px (window %dx%d * %.2f)", pxW, pxH, winW, winH, bsf);
 }
 
@@ -1121,6 +1155,9 @@ bool PresentFrame()
 	if (eglDpy == EGL_NO_DISPLAY || eglSfc == EGL_NO_SURFACE)
 		return false;
 
+	// MacCrispInterface: read the full-size default framebuffer unscaled
+	const MacCrisp::Bypass crispBypass;
+
 	// eglSwapBuffers on the (surfaceless) pbuffer presents nowhere, so
 	// read the rendered default framebuffer back and blit it onto the
 	// window's CAMetalLayer via Metal.
@@ -1392,6 +1429,7 @@ void DiagCaptureFrame()
 	const char* cp = getenv("SPRING_FRAME_CAPTURE");
 	if (cp == nullptr)
 		return;
+	const MacCrisp::Bypass crispBypass;
 	if (eglDpy == EGL_NO_DISPLAY || eglSfc == EGL_NO_SURFACE || pbufW <= 0 || pbufH <= 0)
 		return;
 

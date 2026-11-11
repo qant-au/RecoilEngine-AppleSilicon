@@ -233,8 +233,9 @@ This port stands on a lot of prior work, gratefully:
     start on Apple Silicon, from his
     [ZkMacOS](https://github.com/smallketchup82/ZkMacOS) port; his commit,
     authorship kept, on this project's CircuitAI fork. The design of the
-    trackpad camera gestures (`MacTrackpadEnabled`) also follows his port,
-    written again for this tree.
+    trackpad camera gestures (`MacTrackpadEnabled`) and of the full-resolution
+    interface over a lower-resolution world (`MacCrispInterface`) also follows
+    his port, written again for this tree.
   - **[Anatolii / Dimaris-nsk](https://github.com/Dimaris-nsk)**: Spring camera
     for fresh profiles, rotatable-camera scroll speed, content install failure
     classification, safer rapid backups, and finding the missing

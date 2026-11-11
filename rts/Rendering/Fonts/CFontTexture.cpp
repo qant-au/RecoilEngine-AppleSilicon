@@ -19,6 +19,9 @@
 #endif // HEADLESS
 
 #include "Rendering/GL/myGL.h"
+#if defined(__APPLE__) && !defined(HEADLESS)
+#include "System/Platform/Mac/CrispInterface.h"
+#endif
 #include "Rendering/GlobalRendering.h"
 #include "Rendering/Textures/Bitmap.h"
 #include "System/Config/ConfigHandler.h"
@@ -681,9 +684,13 @@ CFontTexture::CFontTexture(const std::string& fontfile, int size, int _outlinesi
 
 	fontRenderer = CglFontRenderer::CreateInstance();
 #ifndef HEADLESS
+#ifdef __APPLE__
+	// MacCrispInterface draws text at twice the engine size: rasterise to match
+	fontRasterScale = MacCrisp::FontRasterScale();
+#endif
 
 	try {
-		shFace = GetRenderFontFace(fontfile, fontSize);
+		shFace = GetRenderFontFace(fontfile, fontSize * fontRasterScale);
 	}
 	catch (content_error& ex) {
 		LOG_L(L_ERROR, "[%s] %s (s=%d): %s", __func__, fontfile.c_str(), fontSize, ex.what());
@@ -695,7 +702,7 @@ CFontTexture::CFontTexture(const std::string& fontfile, int size, int _outlinesi
 
 	FT_Face face = *shFace;
 
-	normScale = 1.0f / (fontSize * FT_INTERNAL_DPI);
+	normScale = 1.0f / (fontSize * fontRasterScale * FT_INTERNAL_DPI);
 	float pixScale = 1.0;
 	bool canScale = false;
 
@@ -1145,7 +1152,7 @@ void CFontTexture::LoadWantedGlyphs(const std::vector<char32_t>& allWanted)
 				++idx;
 			}
 		}
-		f = GetFontForCharacters(map, *shFace, fontSize, alreadyCheckedFonts);
+		f = GetFontForCharacters(map, *shFace, fontSize * fontRasterScale, alreadyCheckedFonts);
 	} while (!map.empty() && f);
 
 	// handle glyphs that didn't reach maxFontTries number of attempts, but nonetheless failed
@@ -1214,10 +1221,10 @@ void CFontTexture::LoadWantedGlyphs(const std::vector<char32_t>& allWanted)
 				blurRectangles.emplace_back(
 					std::max<int>(0, x),
 					std::max<int>(0, y),
-					std::min<int>(wantedTexWidth,  x + 2*outlineSize + atlasGlyphs[glyphIdx].xsize),
-					std::min<int>(wantedTexHeight, y + 2*outlineSize + atlasGlyphs[glyphIdx].ysize)
+					std::min<int>(wantedTexWidth,  x + 2*outlineSize*fontRasterScale + atlasGlyphs[glyphIdx].xsize),
+					std::min<int>(wantedTexHeight, y + 2*outlineSize*fontRasterScale + atlasGlyphs[glyphIdx].ysize)
 				);
-				atlasUpdateShadow.CopySubImage(atlasGlyphs[glyphIdx], x + outlineSize, y + outlineSize);
+				atlasUpdateShadow.CopySubImage(atlasGlyphs[glyphIdx], x + outlineSize*fontRasterScale, y + outlineSize*fontRasterScale);
 			}
 		}
 
@@ -1292,7 +1299,7 @@ void CFontTexture::LoadGlyph(std::shared_ptr<FontFace>& f, char32_t ch, unsigned
 	if (width <= 0 || height <= 0)
 		return;
 
-	const int olSize = 2 * outlineSize;
+	const int olSize = 2 * outlineSize * fontRasterScale;
 	const int channels = slot->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA ? 4 : 1;
 
 	if (slot->bitmap.pixel_mode != FT_PIXEL_MODE_GRAY && slot->bitmap.pixel_mode != FT_PIXEL_MODE_BGRA) {
@@ -1517,7 +1524,7 @@ void CFontTexture::UpdateGlyphAtlasTexture()
 	if (atlasUpdateShadow.xsize == atlasUpdate.xsize && atlasUpdateShadow.ysize == atlasUpdate.ysize) {
 		for_mt(0, blurRectangles.size(), [&](int i) {
 			SRectangle& rect = blurRectangles[i];
-			atlasUpdateShadow.Blur(outlineSize, outlineWeight, rect.x1, rect.y1, rect.x2-rect.x1, rect.y2-rect.y1);
+			atlasUpdateShadow.Blur(outlineSize * fontRasterScale, outlineWeight, rect.x1, rect.y1, rect.x2-rect.x1, rect.y2-rect.y1);
 		});
 		blurRectangles.clear();
 

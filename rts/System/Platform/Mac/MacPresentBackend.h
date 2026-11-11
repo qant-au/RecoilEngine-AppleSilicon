@@ -31,7 +31,9 @@ namespace MacPresent {
 	typedef void* (*LoadProc)(const char* name);
 	LoadProc GetGLLoadProc();
 
-	// pbuffer (= GL default framebuffer) size in physical pixels
+	// the size the engine renders at, in physical pixels: the pbuffer (= GL
+	// default framebuffer) size, or with MacCrispInterface the smaller
+	// MacRenderScale size (the pbuffer then matches the window)
 	void GetDrawableSize(int& w, int& h);
 	// recreate the pbuffer at the window's current pixel size so resizes
 	// render at true resolution; no-op when unchanged or before CreateContext

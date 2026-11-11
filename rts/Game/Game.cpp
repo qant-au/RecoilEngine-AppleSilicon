@@ -136,6 +136,10 @@
 
 #include "System/Misc/TracyDefs.h"
 
+#if defined(__APPLE__) && !defined(HEADLESS)
+#include "System/Platform/Mac/CrispInterface.h"
+#endif
+
 #include "fmt/ranges.h"
 
 
@@ -1520,6 +1524,11 @@ bool CGame::Draw() {
 		// (unlikely);
 		worldDrawer.GenerateIBLTextures();
 
+#if defined(__APPLE__) && !defined(HEADLESS)
+		// MacCrispInterface: the world draws at MacRenderScale into its own buffer
+		MacCrisp::BeginWorld();
+#endif
+
 		// restore back to the default FBO / Viewport
 		if (FBO::IsSupported())
 			FBO::Unbind();
@@ -1537,6 +1546,11 @@ bool CGame::Draw() {
 
 		eventHandler.DrawScreenEffects();
 		globalRendering->GPUStamp("Lua::DrawScreenEffects", true);
+
+#if defined(__APPLE__) && !defined(HEADLESS)
+		// screen effects belong to the world; the interface draws at full resolution
+		MacCrisp::EndWorld();
+#endif
 
 		hudDrawer->Draw((gu->GetMyPlayer())->fpsController.GetControllee());
 		debugDrawerAI->Draw();

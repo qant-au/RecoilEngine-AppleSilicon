@@ -84,6 +84,11 @@ WD=$(mktemp -d "${TMPDIR:-/tmp}/visreg.XXXXXX")
 trap 'rm -rf "$WD"' EXIT
 mkdir -p "$WD/LuaUI/Widgets"
 cp "$BAR/scripts/visreg/visreg_capture.lua" "$WD/LuaUI/Widgets/"
+# VISREG_SHOW_INTERFACE=1 keeps the interface in the pictures (for checks of how
+# it is drawn, e.g. MacCrispInterface); the baselines are taken without it
+if [ "${VISREG_SHOW_INTERFACE:-0}" = "1" ]; then
+  sed -i '' '/hideinterface 1/d' "$WD/LuaUI/Widgets/visreg_capture.lua"
+fi
 # <frame> <name> <x-fraction> <z-fraction> <camera height>
 cat > "$WD/LuaUI/visreg_frames.txt" <<'SHOTS'
 900 01-start-overview 0.5 0.5 9000

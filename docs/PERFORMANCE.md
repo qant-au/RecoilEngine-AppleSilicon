@@ -162,6 +162,21 @@ uses the plain stretch. MetalFX is used only when `MacRenderScale` is below 1,
 so the default setting presents exactly as before. `MacUpscaler` can be changed
 while the game runs.
 
+`MacCrispInterface` (default 0, needs a restart) keeps the interface and its
+text at the window's full resolution while the world renders at
+`MacRenderScale`. It does nothing when `MacRenderScale` is 1. The engine still
+works at the `MacRenderScale` size, so the world, its lighting and the screen
+effects are drawn exactly as with `MacRenderScale` alone. Only the default
+framebuffer is full size. The world is drawn into an engine-size buffer
+(`rts/System/Platform/Mac/CrispInterface.cpp`), stretched into the full-size
+one with plain smooth scaling (no MetalFX), and the interface pass draws on
+top with its viewport and scissor scaled up. Fonts rasterise at twice their
+size. The trade-off: the frame read back each frame is the full window, so
+the mode saves world drawing but not readback. Design after smallketchup82's
+[ZkMacOS](https://github.com/smallketchup82/ZkMacOS) "Retina text and UI"
+mode, written again for this tree. A benchmark render-size pin
+(`SPRING_MAC_PERF_RENDER_SIZE`) turns it off.
+
 ## Buffered Immediate Mode Drawing From Lua
 
 Game widgets draw with `gl.BeginEnd`, which makes one OpenGL call per vertex.

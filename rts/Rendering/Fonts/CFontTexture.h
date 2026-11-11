@@ -171,6 +171,8 @@ protected:
 	float fontDescender;
 	float normScale;
 	int fontSize;
+	// glyphs rasterise at fontSize * fontRasterScale (2 with MacCrispInterface)
+	int fontRasterScale = 1;
 	std::string fontFamily;
 	std::string fontStyle;
 

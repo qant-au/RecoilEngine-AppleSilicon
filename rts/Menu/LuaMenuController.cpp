@@ -15,6 +15,10 @@
 
 #include "System/Misc/TracyDefs.h"
 
+#if defined(__APPLE__) && !defined(HEADLESS)
+#include "System/Platform/Mac/CrispInterface.h"
+#endif
+
 CONFIG(std::string, DefaultLuaMenu).defaultValue("").description("Sets the default menu to be used when spring is started.");
 
 CLuaMenuController* luaMenuController = nullptr;
@@ -118,6 +122,10 @@ bool CLuaMenuController::Draw()
 
 	if (allowDraw || forceDraw) {
 		globalRendering->drawFrame = std::max(1U, globalRendering->drawFrame + 1);
+#if defined(__APPLE__) && !defined(HEADLESS)
+		// the lobby does not set its viewport each frame
+		MacCrisp::BeginInterface();
+#endif
 		ClearScreen();
 
 		eventHandler.DrawGenesis();
